@@ -60,7 +60,7 @@ const AddBillView = ({
     fetchPromotions();
   }, []);
 
-  const { subTotal, totalsale, discount, activePromos } = useMemo(() => {
+  const { subTotal, totalsale, discount, activePromos, setSidebarOpen } = useMemo(() => {
     let subTotal = billItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
     let discount = 0;
     let activePromos = [];
@@ -373,7 +373,7 @@ const AddBillView = ({
 
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
-      <Header title="🧾 สร้างบิลใหม่" />
+      <Header title="🧾 สร้างบิลใหม่" onToggleSidebar={() => setSidebarOpen(prev => !prev)}/>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
 
         {/* Left Column: Inputs & Search */}
