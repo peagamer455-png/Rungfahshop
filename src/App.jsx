@@ -244,6 +244,7 @@ const App = () => {
                   setShowPopup={setShowPopup}
                   sensitiveVisible={sensitiveVisible}
                   onToggleSensitive={() => setSensitiveVisible(!sensitiveVisible)}
+                  setSidebarOpen={setIsSidebarOpen}  
                 />
               }
             />
