@@ -304,7 +304,7 @@ const AddBillView = ({
   const handleBarcodeScan = useCallback((barcode) => {
     const translatedBarcode = translateBarcode(barcode);
     const foundProduct = products.find(
-      (p) => String(p.id) === String(barcode) || String(p.barcode) === String(barcode)
+      (p) => String(p.id) === String(translatedBarcode) || String(p.barcode) === String(barcode)
     );
 
     if (foundProduct) {
@@ -312,7 +312,7 @@ const AddBillView = ({
     } else {
       setPopupContent({
         title: "🔍 ไม่พบสินค้า",
-        message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${barcode}`,
+        message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${translatedBarcode}`,
         color: "yellow"
       });
       setShowPopup(true);
