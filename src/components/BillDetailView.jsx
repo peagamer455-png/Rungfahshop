@@ -133,7 +133,7 @@ const BillDetailView = ({ bills, products, navigateTo, openPasswordModal, curren
                         {/* ส่วนลด (แสดงเฉพาะเมื่อมี) */}
                         {bill.discount > 0 && (
                             <div className="flex justify-between items-center">
-                                <span className="text-orange-400 font-bold">ส่วนลด</span>
+                                <span className="text-red-400 font-bold">ส่วนลด</span>
                                 <span className="font-mono text-red-500 font-bold">-{formatCurrency(bill.discount)}</span>
                             </div>
                         )}
