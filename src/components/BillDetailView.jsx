@@ -121,36 +121,37 @@ const BillDetailView = ({ bills, products, navigateTo, openPasswordModal, curren
                         </div>
                     </div>
 
-                    {/* สรุปข้อมูลการเงิน (ไม่มี onClick แล้ว) */}
-                    <div className="flex justify-between items-center">
-                        <span className="text-slate-500 font-bold">ยอดรวม</span>
-                        <span className="text-xl font-bold text-slate-700">{formatCurrency(bill.total_net + (bill.discount || 0))}</span>
-                    </div>
-                
-                    {/* ส่วนลด (แสดงเฉพาะเมื่อมี) */}
-                    {bill.discount > 0 && (
+                                        {/* สรุปข้อมูลการเงิน */}
+                    <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-3">
+                    
+                        {/* ยอดรวมก่อนหักส่วนลด */}
                         <div className="flex justify-between items-center">
-                            <span className="text-orange-400 font-bold">ส่วนลด</span>
-                            <span className="font-mono text-orange-500 font-bold">-{formatCurrency(bill.discount)}</span>
+                            <span className="text-slate-500 font-bold">ยอดรวม</span>
+                            <span className="text-xl font-bold text-slate-700">{formatCurrency(bill.total_net + (bill.discount || 0))}</span>
                         </div>
-                    )}
-                
-                    {/* ยอดสุทธิ */}
-                    <div className={`flex justify-between items-center ${bill.discount > 0 ? 'pt-4 border-t border-slate-200' : ''}`}>
-                        <span className="text-slate-500 font-bold">ยอดสุทธิ</span>
-                        <span className="text-2xl font-black text-emerald-600">{formatCurrency(bill.total_net)}</span>
-                    </div>
-
-                        <div className="pt-4 border-t border-slate-200 space-y-2">
-                            {/* แสดงต้นทุนรวม */}
+                    
+                        {/* ส่วนลด (แสดงเฉพาะเมื่อมี) */}
+                        {bill.discount > 0 && (
+                            <div className="flex justify-between items-center">
+                                <span className="text-orange-400 font-bold">ส่วนลด</span>
+                                <span className="font-mono text-orange-500 font-bold">-{formatCurrency(bill.discount)}</span>
+                            </div>
+                        )}
+                    
+                        {/* ยอดสุทธิ */}
+                        <div className={`flex justify-between items-center pt-3 border-t border-slate-200`}>
+                            <span className="text-slate-500 font-bold">ยอดสุทธิ</span>
+                            <span className="text-2xl font-black text-emerald-600">{formatCurrency(bill.total_net)}</span>
+                        </div>
+                    
+                        {/* ต้นทุน / กำไร */}
+                        <div className="pt-3 border-t border-slate-200 space-y-2">
                             <div className="flex justify-between text-md">
                                 <span className="text-red-400 font-bold">ต้นทุนรวม</span>
                                 <span className="font-mono text-red-600 font-bold">
                                     {sensitiveVisible ? `-${formatCurrency(totalcost)}` : "-xxxx"}
                                 </span>
                             </div>
-
-                            {/* แสดงกำไรสุทธิ */}
                             <div className="flex justify-between text-md">
                                 <span className="text-green-500 font-bold">กำไรสุทธิ</span>
                                 <span className="font-bold text-green-500">
@@ -158,6 +159,7 @@ const BillDetailView = ({ bills, products, navigateTo, openPasswordModal, curren
                                 </span>
                             </div>
                         </div>
+                    
                     </div>
 
                     <div className="flex justify-center">
