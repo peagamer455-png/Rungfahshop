@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { handlePrint } from './PrintService';
 import PasswordConfirmModal from "./PasswordConfirmModal";
 
-const BillDetailView = ({ bills, products, navigateTo, openPasswordModal, currentBillId }) => {
+const BillDetailView = ({ bills, products, navigateTo, openPasswordModal, currentBillId, setSidebarOpen }) => {
     const [sensitiveVisible, setSensitiveVisible] = useState(false);
     const [searchParams] = useSearchParams();
     const idFromUrl = searchParams.get('id');
@@ -45,6 +45,7 @@ const BillDetailView = ({ bills, products, navigateTo, openPasswordModal, curren
                 title={`📋 รายละเอียดบิลเลขที่ #${bill.billNumber || String(bill.id).substring(0, 5)}`}
                 sensitiveVisible={sensitiveVisible}
                 onToggleSensitive={handleToggleSensitive}
+                onToggleSidebar={() => setSidebarOpen(prev => !prev)}
             />
 
             <div className="mx-auto max-w-2xl bg-white shadow-lg shadow-slate-200/50 rounded-3xl overflow-hidden border border-slate-100 mx-4 mt-8">
