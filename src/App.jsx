@@ -194,10 +194,10 @@ const App = () => {
                   loadData={loadData}
                   setPopupContent={setPopupContent}
                   setShowPopup={setShowPopup}
+                  setSidebarOpen={setIsSidebarOpen}
                   showBillDetails={(id) => {
                     setCurrentBillId(id);
                     navigate(`/bill-detail?id=${id}`);
-                    setSidebarOpen={setIsSidebarOpen}
                   }}
                 />
               }
