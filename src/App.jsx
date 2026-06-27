@@ -168,6 +168,7 @@ const App = () => {
                   openPasswordModal={openPasswordModal}
                   onToggleSensitive={requestPasswordAndToggle}
                   navigateTo={handleNavigate}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -180,6 +181,7 @@ const App = () => {
                   setPopupContent={setPopupContent}
                   setShowPopup={setShowPopup}
                   navigateTo={handleNavigate}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -195,6 +197,7 @@ const App = () => {
                   showBillDetails={(id) => {
                     setCurrentBillId(id);
                     navigate(`/bill-detail?id=${id}`);
+                    setSidebarOpen={setIsSidebarOpen}
                   }}
                 />
               }
@@ -206,6 +209,7 @@ const App = () => {
                   products={products}
                   setPopupContent={setPopupContent}
                   setShowPopup={setShowPopup}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -216,6 +220,7 @@ const App = () => {
                   bills={bills}
                   formatCurrency={formatCurrency}
                   openPasswordModal={openPasswordModal}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -228,6 +233,7 @@ const App = () => {
                   setPopupContent={setPopupContent}
                   openPasswordModal={openPasswordModal}
                   setShowPopup={setShowPopup}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -260,6 +266,7 @@ const App = () => {
                   navigateTo={handleNavigate}
                   setShowPopup={setShowPopup}
                   setPopupContent={setPopupContent}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
