@@ -220,7 +220,6 @@ const App = () => {
                   bills={bills}
                   formatCurrency={formatCurrency}
                   openPasswordModal={openPasswordModal}
-                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
