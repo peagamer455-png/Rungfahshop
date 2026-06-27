@@ -551,6 +551,7 @@ const ProductManagerView = ({
         title="📦 จัดการสินค้า"
         sensitiveVisible={sensitiveVisible}
         onToggleSensitive={handleToggleSensitive}
+        onToggleSidebar={() => setSidebarOpen(prev => !prev)}
       />
       {importProgress > 0 && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
