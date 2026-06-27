@@ -127,7 +127,7 @@ const BillDetailView = ({ bills, products, navigateTo, openPasswordModal, curren
                         {/* ยอดรวมก่อนหักส่วนลด */}
                         <div className="flex justify-between items-center">
                             <span className="text-slate-500 font-bold">ยอดรวม</span>
-                            <span className="text-xl font-bold text-slate-700">{formatCurrency(bill.total_net + (bill.discount || 0))}</span>
+                            <span className="text-xl font-bold text-slate-700">{formatCurrency(bill.totalsale)}</span>
                         </div>
                     
                         {/* ส่วนลด (แสดงเฉพาะเมื่อมี) */}
