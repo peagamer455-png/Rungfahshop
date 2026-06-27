@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
+import { Header } from "./SharedUI";
 import Pagination from './Pagination';
 import HistoryBillCard from './HistoryBillCard';
 
