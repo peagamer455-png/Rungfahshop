@@ -12,7 +12,7 @@ const ProductManagerView = ({
   openPasswordModal,
   setPopupContent,
   setShowPopup,
-  setSidebarOpen,
+  setSidebarOpen
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [currentProduct, setCurrentProduct] = useState({
