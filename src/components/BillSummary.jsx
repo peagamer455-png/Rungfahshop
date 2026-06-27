@@ -39,11 +39,6 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
     };
 
     useEffect(() => {
-        if (payMode === 'cash') setCash(totalsale);
-        else if (payMode === 'transfer') setCash(0);
-    }, [netTotal, payMode]);
-
-    useEffect(() => {
         if (payMode === 'cash') setCash(netTotal);
         else if (payMode === 'transfer') setCash(0);
     }, [netTotal, payMode]);
@@ -161,7 +156,7 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
 
             <button
                 onClick={() => onSave({ payMode: payMode, paymentDetails: { cash, transfer }, printSize })}
-                disabled={!canSave || isSubmitting || cash < 0 || cash < netTotal}
+                disabled={!canSave || isSubmitting || cash < 0 ||(payMode === 'cash' && cash < netTotal)}
                 className="w-full mt-4 py-5 bg-white text-black rounded-xl font-black text-xl hover:bg-gray-100 transition-all shadow-xl disabled:opacity-50 border-b-4 border-gray-300"
             >
                 {isSubmitting ? 'กำลังบันทึก...' : '💾 บันทึกข้อมูล'}
