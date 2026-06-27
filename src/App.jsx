@@ -91,6 +91,43 @@ const App = () => {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    const channel = supabase
+      .channel('bills-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bills' },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadData]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('db-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bills' },
+        () => loadData()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        () => loadData()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [loadData]);
+
   const openPasswordModal = (onSuccess) => {
     setPasswordOnSuccess(() => onSuccess);
     setPasswordInput("");
@@ -205,7 +242,7 @@ const App = () => {
                   setCurrentBillId={setCurrentBillId}
                   openPasswordModal={openPasswordModal}
                   setShowPopup={setShowPopup}
-                  sensitiveVisible={sensitiveVisible} 
+                  sensitiveVisible={sensitiveVisible}
                   onToggleSensitive={() => setSensitiveVisible(!sensitiveVisible)}
                 />
               }
