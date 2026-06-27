@@ -173,13 +173,10 @@ const PromotionView = ({ products, setPopupContent, setShowPopup }) => {
 
         <button
           type="button"
-          onClick={() => {
-            setFormData({ ...formData, items: [...formData.items, { id: p.id, name: p.name, qty: 1 }] });
-            setSearchTerm('');
-          }}
+          onClick={() => setFormData({ ...formData, type: 'bundle', items: [] })}  // ✅
           className={`p-4 rounded-xl text-sm font-bold border-2 transition-all ${formData.type === 'bundle'
-            ? 'border-green-500 bg-green-50 text-green-700'
-            : 'border-gray-300 bg-white text-gray-500 hover:border-gray-400'
+              ? 'border-green-500 bg-green-50 text-green-700'
+              : 'border-gray-300 bg-white text-gray-500 hover:border-gray-400'
             }`}
         >
           จับคู่สินค้า (Bundle)

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Header } from "./SharedUI";
-import { formatCurrency } from "../utils";
+import { formatCurrency, translateBarcode } from "../utils";
 import { putData } from "../api";
 import BillItemRow from "./BillItemRow";
 import BillSummary from "./BillSummary";
@@ -14,9 +14,16 @@ const AddBillView = ({
   setShowPopup,
   loadData,
 }) => {
-  const [billItems, setBillItems] = useState([]);
-  const [customer, setCustomer] = useState("");
-  const [customerDetail, setCustomerDetail] = useState(""); // เพิ่ม State นี้
+  const [billItems, setBillItems] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('draft_add_items') || '[]'); }
+    catch { return []; }
+  });
+  const [customer, setCustomer] = useState(() =>
+    localStorage.getItem('draft_add_customer') || ""
+  );
+  const [customerDetail, setCustomerDetail] = useState(() =>
+    localStorage.getItem('draft_add_customerDetail') || ""
+  );
   const [amountReceived, setAmountReceived] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -25,6 +32,25 @@ const AddBillView = ({
   const barcodeBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
   const [promotions, setPromotions] = useState([]);
+
+  useEffect(() => {
+    localStorage.setItem('draft_add_items', JSON.stringify(billItems));
+  }, [billItems]);
+
+  useEffect(() => {
+    localStorage.setItem('draft_add_customer', customer);
+  }, [customer]);
+
+  useEffect(() => {
+    localStorage.setItem('draft_add_customerDetail', customerDetail);
+  }, [customerDetail]);
+
+  // เพิ่มฟังก์ชัน clearDraft
+  const clearDraft = () => {
+    localStorage.removeItem('draft_add_items');
+    localStorage.removeItem('draft_add_customer');
+    localStorage.removeItem('draft_add_customerDetail');
+  };
 
   useEffect(() => {
     const fetchPromotions = async () => {
@@ -249,6 +275,7 @@ const AddBillView = ({
       };
       await putData("bills", finalBill);
       await loadData();
+      clearDraft();
       setPopupContent({
         title: "✅ บันทึกสำเร็จ",
         message: "ระบบได้ทำการบันทึกบิลเรียบร้อยแล้วครับ",
@@ -302,8 +329,9 @@ const AddBillView = ({
   }, [searchTerm, products, billItems]);
 
   const handleBarcodeScan = useCallback((barcode) => {
+    const translatedBarcode = translateBarcode(barcode);
     const foundProduct = products.find(
-      (p) => String(p.id) === String(barcode) || String(p.barcode) === String(barcode)
+      (p) => String(p.id) === String(translatedBarcode) || String(p.barcode) === String(barcode)
     );
 
     if (foundProduct) {
@@ -311,7 +339,7 @@ const AddBillView = ({
     } else {
       setPopupContent({
         title: "🔍 ไม่พบสินค้า",
-        message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${barcode}`,
+        message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${translatedBarcode}`,
         color: "yellow"
       });
       setShowPopup(true);
@@ -390,7 +418,12 @@ const AddBillView = ({
                     >
                       <div className="flex flex-col">
                         <span className="font-medium text-gray-800">{p.name}</span>
-                        <span className={`text-sm font-semibold ${isOutOfStock ? "text-red-500" : "text-blue-600"}`}>
+                        <span className={`text-sm font-semibold ${isOutOfStock
+                          ? "text-red-500"
+                          : p.stock < 5
+                            ? "text-red-500"
+                            : "text-blue-600"
+                          }`}>
                           {isOutOfStock ? "สินค้าหมด" : `คงเหลือ: ${p.stock} ${p.unit || 'ชิ้น'}`}
                         </span>
                       </div>

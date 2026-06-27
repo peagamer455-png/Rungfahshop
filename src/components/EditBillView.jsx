@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { formatCurrency } from '../utils';
+import { formatCurrency, translateBarcode } from "../utils";
 import BillSummary from './BillSummary';
 import { supabase } from '../supabaseClient';
 import { Header } from "./SharedUI";
@@ -28,7 +28,14 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
 
     const [customer, setCustomer] = useState(billToEdit.customer || '');
     const [customerDetail, setCustomerDetail] = useState(billToEdit.customer_detail || '');
-    const [billItems, setBillItems] = useState(billToEdit.items || []);
+    const draftKey = `draft_edit_${id}`;
+    const [billItems, setBillItems] = useState(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem(draftKey) || 'null');
+            return saved || billToEdit.items || [];
+        }
+        catch { return billToEdit.items || []; }
+    });
     const [searchTerm, setSearchTerm] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [printSize, setPrintSize] = useState(null);
@@ -36,6 +43,12 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
     const barcodeBufferRef = useRef("");
     const lastKeyTimeRef = useRef(0);
     const [promotions, setPromotions] = useState([]);
+
+    useEffect(() => {
+        localStorage.setItem(draftKey, JSON.stringify(billItems));
+    }, [billItems, draftKey]);
+
+    const clearDraft = () => localStorage.removeItem(draftKey);
 
     useEffect(() => {
         const fetchPromotions = async () => {
@@ -51,28 +64,31 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
         let activePromos = [];
 
         promotions.forEach(promo => {
-            // ลอจิก: โปรโมชั่นแบบซื้อครบ (Qty)
             if (promo.type === 'qty') {
                 const itemInCart = billItems.find(i => i.productId === promo.items[0]?.id);
                 if (itemInCart && itemInCart.qty >= promo.min_qty) {
-                    // ส่วนลด = (ราคาปกติ - ราคาโปร)
-                    const currentItemPrice = itemInCart.price * itemInCart.qty;
-                    discount += Math.max(0, currentItemPrice - promo.discount_price);
-                    activePromos.push(promo.name);
+                    const sets = Math.floor(itemInCart.qty / promo.min_qty);
+                    const discountPerSet = (itemInCart.price * promo.min_qty) - promo.discount_price;
+                    discount += sets * discountPerSet;
+                    activePromos.push(`${promo.name} (${sets} ชุด)`);
                 }
             }
-            // ลอจิก: โปรโมชั่นแบบจับคู่ (Bundle)
             else if (promo.type === 'bundle') {
-                const allItemsInBundle = promo.items.every(pItem =>
-                    billItems.find(bItem => bItem.productId === pItem.id)
-                );
-                if (allItemsInBundle) {
+                const possibleSets = promo.items.map(pItem => {
+                    const bItem = billItems.find(b => b.productId === pItem.id);
+                    const requiredQty = (pItem.qty && pItem.qty > 0) ? pItem.qty : 1;
+                    return bItem ? Math.floor(bItem.qty / requiredQty) : 0;
+                });
+                const maxSets = Math.min(...possibleSets);
+                if (maxSets > 0) {
                     const bundleNormalPrice = promo.items.reduce((acc, pItem) => {
                         const item = billItems.find(b => b.productId === pItem.id);
-                        return acc + item.price;
+                        const requiredQty = (pItem.qty && pItem.qty > 0) ? pItem.qty : 1;
+                        return acc + (item ? (item.price * requiredQty) : 0);
                     }, 0);
-                    discount += Math.max(0, bundleNormalPrice - promo.discount_price);
-                    activePromos.push(promo.name);
+                    const discountPerSet = bundleNormalPrice - promo.discount_price;
+                    discount += maxSets * discountPerSet;
+                    activePromos.push(`${promo.name} (${maxSets} ชุด)`);
                 }
             }
         });
@@ -292,8 +308,9 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
     }, [searchTerm, products, billItems]);
 
     const handleBarcodeScan = useCallback((barcode) => {
+        const translatedBarcode = translateBarcode(barcode);
         const foundProduct = products.find(
-            (p) => String(p.id) === String(barcode) || String(p.barcode) === String(barcode)
+            (p) => String(p.id) === String(translatedBarcode) || String(p.barcode) === String(barcode)
         );
 
         if (foundProduct) {
@@ -301,7 +318,7 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
         } else {
             setPopupContent({
                 title: "🔍 ไม่พบสินค้า",
-                message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${barcode}`,
+                message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${translatedBarcode}`,
                 color: "yellow"
             });
             setShowPopup(true);
@@ -380,8 +397,13 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
                                         >
                                             <div className="flex flex-col">
                                                 <span className="font-medium text-gray-800">{p.name}</span>
-                                                <span className={`text-sm font-semibold ${isOutOfStock ? "text-red-500" : "text-yellow-600"}`}>
-                                                    {isOutOfStock ? "สินค้าหมด" : `คงเหลือ: ${p.stock}`}
+                                                <span className={`text-sm font-semibold ${isOutOfStock
+                                                    ? "text-red-500"
+                                                    : p.stock < 5
+                                                        ? "text-red-500"
+                                                        : "text-blue-600"
+                                                    }`}>
+                                                    {isOutOfStock ? "สินค้าหมด" : `คงเหลือ: ${p.stock} ${p.unit || 'ชิ้น'}`}
                                                 </span>
                                             </div>
                                             <span className="text-sm font-semibold text-yellow-600">{formatCurrency(p.price)}</span>

@@ -30,39 +30,42 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
 
     const dailySummary = useMemo(() => {
         return todayBills.reduce((acc, b) => {
-
-            const totalsale = Number(b.total_net) || 0;
+            const total_net = Number(b.total_net) || 0;
             const billCost = (b.items || []).reduce((sum, item) => {
                 return sum + ((Number(item.cost) || 0) * (Number(item.qty) || 0));
             }, 0);
 
-            acc.totalsale += totalsale;
+            acc.totalsale += total_net;
             acc.totalcost += billCost;
 
             const details = typeof b.payment_details === 'string'
                 ? JSON.parse(b.payment_details)
-                : (b.payment_details || {});
+                : (b.payment_details || null);
 
-            if (b.payment_details) {
-                // กรณีจ่ายผสม (แบบใหม่)
-                acc.cash += (Number(details.cash) || 0);
-                acc.transfer += (Number(details.transfer) || 0);
+            if (details) {
+                const cash = Number(details.cash) || 0;
+                const transfer = Number(details.transfer) || 0;
+                const detailSum = cash + transfer;
+
+                acc.cash += cash;
+                acc.transfer += transfer;
+
+                // ถ้า cash+transfer ไม่ครบ total_net (บิลเก่าที่ข้อมูลไม่สมบูรณ์)
+                // ให้เอาส่วนที่ขาดไปใส่ cash
+                const diff = total_net - detailSum;
+                if (diff > 0) acc.cash += diff;
+
             } else {
-                // กรณีบิลเก่า (แบบเดิมที่เก็บเป็น string)
+                // บิลเก่าที่ไม่มี payment_details เลย
                 if (b.payment_method === 'transfer') {
-                    acc.transfer += totalsale;
+                    acc.transfer += total_net;
                 } else {
-                    acc.cash += totalsale;
+                    acc.cash += total_net;
                 }
             }
 
             return acc;
-        }, {
-            totalsale: 0,
-            totalcost: 0,
-            cash: 0,       // กำหนดค่าเริ่มต้นเป็น 0
-            transfer: 0    // กำหนดค่าเริ่มต้นเป็น 0
-        });
+        }, { totalsale: 0, totalcost: 0, cash: 0, transfer: 0 });
     }, [todayBills]);
 
     // ฟังก์ชันจัดการการคลิกเปิด/ปิดข้อมูล Sensitive

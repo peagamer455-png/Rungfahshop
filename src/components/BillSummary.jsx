@@ -58,11 +58,12 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
 
     const handleCashChange = (val) => {
         let value = Number(val) || 0;
-        // ล็อคไม่ให้ต่ำกว่า 0 และไม่ให้เกิน totalSale
         if (value < 0) value = 0;
-        if (value > netTotal) value = totalsale;
         setCash(value);
     };
+
+    // ยอดเงินสดที่บันทึกจริง = ไม่เกิน netTotal (ส่วนที่เกินคือเงินทอน ไม่ใช่รายรับ)
+    const cashToRecord = Math.min(cash, netTotal);
 
     return (
         <div className={`sticky top-20 ${bgMain} text-white p-6 rounded-xl shadow-2xl space-y-4 border ${borderMain}`}>
@@ -132,8 +133,8 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
                     </div>
 
                     <div className={`p-3 rounded-lg border border-dashed flex justify-between items-center ${payMode === 'cash'
-                            ? (cash >= netTotal ? "bg-green-600/30 border-green-300" : "bg-red-600/30 border-red-300")
-                            : "bg-blue-600/30 border-blue-300"
+                        ? (cash >= netTotal ? "bg-green-600/30 border-green-300" : "bg-red-600/30 border-red-300")
+                        : "bg-blue-600/30 border-blue-300"
                         }`}>
                         <span className="text-sm font-bold">
                             {payMode === 'cash'
@@ -160,8 +161,8 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
             </div>
 
             <button
-                onClick={() => onSave({ payMode: payMode, paymentDetails: { cash, transfer }, printSize })}
-                disabled={!canSave || isSubmitting || cash < 0 || cash < netTotal}
+                onClick={() => onSave({ payMode: payMode, paymentDetails: { cash: cashToRecord, transfer }, printSize })}
+                disabled={!canSave || isSubmitting || cash < netTotal}
                 className="w-full mt-4 py-5 bg-white text-black rounded-xl font-black text-xl hover:bg-gray-100 transition-all shadow-xl disabled:opacity-50 border-b-4 border-gray-300"
             >
                 {isSubmitting ? 'กำลังบันทึก...' : '💾 บันทึกข้อมูล'}

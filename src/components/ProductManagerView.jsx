@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Header } from "./SharedUI";
 import { supabase } from "../supabaseClient";
 import { formatCurrency, translateBarcode } from "../utils";
@@ -29,6 +29,8 @@ const ProductManagerView = ({
   const currentPage = parseInt(searchParams.get("page") || "1");
   const [showCost, setShowCost] = useState(false);
   const [sensitiveVisible, setSensitiveVisible] = useState(false);
+  const barcodeBufferRef = useRef("");
+  const lastKeyTimeRef = useRef(0);
   const itemsPerPage = 25;
 
   const setCurrentPage = (page) => {
@@ -350,6 +352,39 @@ const ProductManagerView = ({
     setShowPopup(true);
   };
 
+  useEffect(() => {
+    const handleScanner = (e) => {
+      const activeEl = document.activeElement;
+      const activeTag = activeEl?.tagName;
+      const isBarcodeInput = activeEl?.dataset?.barcode === "true";
+
+      if ((activeTag === "INPUT" || activeTag === "TEXTAREA") && !isBarcodeInput) return;
+
+      const now = Date.now();
+      const timeDiff = now - lastKeyTimeRef.current;
+
+      if (timeDiff > 300) barcodeBufferRef.current = "";
+      lastKeyTimeRef.current = now;
+
+      if (e.key === "Enter") {
+        const raw = barcodeBufferRef.current;
+        if (raw.length > 2) {
+          const hasThaiChars = /[\u0E00-\u0E7F]/.test(raw);
+          const result = hasThaiChars ? translateBarcode(raw) : raw;
+          setCurrentProduct(prev => ({ ...prev, barcode: result }));
+        }
+        barcodeBufferRef.current = "";
+        e.preventDefault();
+      } else if (e.key.length === 1) {
+        if (isBarcodeInput) e.preventDefault();
+        barcodeBufferRef.current += e.key;
+      }
+    };
+
+    window.addEventListener("keypress", handleScanner);
+    return () => window.removeEventListener("keypress", handleScanner);
+  }, []); // ← เปลี่ยนเป็น [] เพราะใช้ setCurrentProduct แบบ functional update (prev =>) แล้วไม่ต้องการ closure ของ state
+
   if (isEditing) {
     return (
       <div className="p-6 bg-gray-50 min-h-screen">
@@ -476,15 +511,13 @@ const ProductManagerView = ({
               </label>
               <input
                 type="text"
+                data-barcode="true"
                 value={currentProduct.barcode || ""}
                 onChange={(e) =>
-                  setCurrentProduct({
-                    ...currentProduct,
-                    barcode: e.target.value,
-                  })
+                  setCurrentProduct({ ...currentProduct, barcode: e.target.value })
                 }
                 className="w-full p-3 border rounded-lg"
-                placeholder="เว้นว่างเพื่อสร้างอัตโนมัติ"
+                placeholder="แสกนหรือพิมพ์บาร์โค้ด"
               />
             </div>
 
