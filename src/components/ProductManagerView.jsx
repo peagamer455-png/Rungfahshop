@@ -12,6 +12,7 @@ const ProductManagerView = ({
   openPasswordModal,
   setPopupContent,
   setShowPopup,
+  setSidebarOpen,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [currentProduct, setCurrentProduct] = useState({
@@ -392,6 +393,7 @@ const ProductManagerView = ({
           title={currentProduct.id ? "✏️ แก้ไขสินค้า" : "➕ เพิ่มสินค้าใหม่"}
           sensitiveVisible={sensitiveVisible}
           onToggleSensitive={handleToggleSensitive}
+          onToggleSidebar={() => setSidebarOpen(prev => !prev)}
         />
         {importProgress > 0 && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
