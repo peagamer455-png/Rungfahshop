@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient';
 import Pagination from './Pagination';
 import HistoryBillCard from './HistoryBillCard';
 
-const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPopup, showBillDetails }) => {
+const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPopup, showBillDetails, setSidebarOpen}) => {
   const [filterTerm, setFilterTerm] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -81,7 +81,7 @@ const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPo
 
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl font-bold text-gray-800 mb-6">📜 ประวัติบิลทั้งหมด</h1>
+      <Header title={`📋 ประวัติบิลทั้งหมด`} onToggleSidebar={() => setSidebarOpen(prev => !prev)}/>
 
       {/* Filter Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
