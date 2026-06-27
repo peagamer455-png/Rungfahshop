@@ -122,11 +122,24 @@ const BillDetailView = ({ bills, products, navigateTo, openPasswordModal, curren
                     </div>
 
                     {/* สรุปข้อมูลการเงิน (ไม่มี onClick แล้ว) */}
-                    <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-4">
+                    <div className="flex justify-between items-center">
+                        <span className="text-slate-500 font-bold">ยอดรวม</span>
+                        <span className="text-xl font-bold text-slate-700">{formatCurrency(bill.total_net + (bill.discount || 0))}</span>
+                    </div>
+                
+                    {/* ส่วนลด (แสดงเฉพาะเมื่อมี) */}
+                    {bill.discount > 0 && (
                         <div className="flex justify-between items-center">
-                            <span className="text-slate-500 font-bold">ยอดสุทธิ</span>
-                            <span className="text-2xl font-black text-emerald-600">{formatCurrency(bill.total_net)}</span>
+                            <span className="text-orange-400 font-bold">ส่วนลด</span>
+                            <span className="font-mono text-orange-500 font-bold">-{formatCurrency(bill.discount)}</span>
                         </div>
+                    )}
+                
+                    {/* ยอดสุทธิ */}
+                    <div className={`flex justify-between items-center ${bill.discount > 0 ? 'pt-4 border-t border-slate-200' : ''}`}>
+                        <span className="text-slate-500 font-bold">ยอดสุทธิ</span>
+                        <span className="text-2xl font-black text-emerald-600">{formatCurrency(bill.total_net)}</span>
+                    </div>
 
                         <div className="pt-4 border-t border-slate-200 space-y-2">
                             {/* แสดงต้นทุนรวม */}
