@@ -304,7 +304,15 @@ const ProductManagerView = ({
           .eq("id", currentProduct.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("products").insert([payload]);
+        const { data: maxData } = await supabase
+          .from("products")
+          .select("id")
+          .order("id", { ascending: false })
+          .limit(1)
+          .single();
+        const nextId = (maxData?.id ?? 0) + 1;
+        
+        const { error } = await supabase.from("products").insert([{ ...payload, id: nextId }]);
         if (error) throw error;
       }
 
