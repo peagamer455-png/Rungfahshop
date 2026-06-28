@@ -462,6 +462,7 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
                             setPrintSize={setPrintSize}
                             discount={discount}
                             activePromos={activePromos}
+                            initialPaymentDetails={billToEdit.payment_details}
                         />
                     </div>
                 </div>
