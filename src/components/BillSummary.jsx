@@ -29,7 +29,11 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
     const btnInactive = isGreen ? "bg-green-800" : "bg-yellow-700";
     const c = colors[theme];
     const [payMode, setPayMode] = useState(initialPaymentDetails?.method || 'cash');
-    const [cash, setCash] = useState(totalsale);
+    const [cash, setCash] = useState(() => {
+    if (initialPaymentDetails?.method === 'transfer') return 0;
+    if (initialPaymentDetails?.cash != null) return initialPaymentDetails.cash;
+    return totalsale;
+});
     const netTotal = Math.max(0, subTotal - discount);
     const [receivedAmount, setReceivedAmount] = useState(0);
 
