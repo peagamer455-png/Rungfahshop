@@ -118,38 +118,36 @@ const AddBillView = ({
     const product = products.find((p) => p.id === productId);
     const item = billItems.find((i) => i.productId === productId);
     if (!product || !item) return;
+
     let newQty = isSet ? delta : item.qty + delta;
-    if (newQty < 0) {
-      newQty = 0;
-    }
+    if (newQty < 0) newQty = 0;
 
     const availableStock = (product.stock || 0) + item.qty;
 
-    if (newQty > product.stock) {
-      setPopupContent({
-        title: "⚠️ สินค้าไม่เพียงพอ",
-        message: `ขออภัยครับ สินค้านี้เหลือสต็อกเพียง ${product.stock} ชิ้นเท่านั้น`,
-        color: "red"
-      });
-      setShowPopup(true);
-      return;
+    if (newQty > availableStock) {
+        setPopupContent({
+            title: "⚠️ สินค้าไม่เพียงพอ",
+            message: `ขออภัยครับ สินค้านี้มีสต็อกทั้งหมด ${availableStock} ชิ้นเท่านั้น`,
+            color: "red"
+        });
+        setShowPopup(true);
+        return;
     }
-
 
     setBillItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty: newQty } : i)));
 
     if (!isSet) {
-      const { error } = await supabase.rpc(
-        delta > 0 ? "decrement_stock" : "increment_stock",
-        { p_id: parseInt(productId), amount: Math.abs(delta) }
-      );
-      if (error) {
-        setPopupContent({ title: "⚠️ ผิดพลาด", message: "ไม่สามารถอัปเดตสต็อกได้", color: "red" });
-        setShowPopup(true);
-        loadData();
-      }
+        const { error } = await supabase.rpc(
+            delta > 0 ? "decrement_stock" : "increment_stock",
+            { p_id: parseInt(productId), amount: Math.abs(delta) }
+        );
+        if (error) {
+            setPopupContent({ title: "⚠️ ผิดพลาด", message: "ไม่สามารถอัปเดตสต็อกได้", color: "red" });
+            setShowPopup(true);
+            loadData();
+        }
     }
-  };
+};
 
   const addItemToBill = async (product) => {
     const existingItem = billItems.find((i) => i.productId === product.id);
