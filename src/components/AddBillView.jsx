@@ -119,15 +119,21 @@ const AddBillView = ({
   }, [billItems, promotions]);
 
   const updateItemQty = async (productId, delta, isSet = false) => {
-    const product = products.find((p) => p.id === productId);
     const item = billItems.find((i) => i.productId === productId);
-    if (!product || !item) return;
+    if (!item) return;
 
     let newQty = isSet ? delta : item.qty + delta;
     if (newQty < 0) newQty = 0;
 
-    const availableStock = (product.stock || 0) + item.qty;
-    console.log(`[stock check] product.stock=${product.stock}, item.qty=${item.qty}, availableStock=${availableStock}, newQty=${newQty}`);
+    // ✅ ดึง stock สดจาก DB โดยตรง ไม่เชื่อ props
+    const { data: freshProduct } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', productId)
+        .single();
+
+    const currentStock = freshProduct?.stock ?? 0;
+    const availableStock = currentStock + item.qty; // บวก qty ที่อยู่ในบิลกลับมา
 
     if (newQty > availableStock) {
         setPopupContent({
