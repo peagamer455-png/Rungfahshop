@@ -118,15 +118,12 @@ const AddBillView = ({
     const product = products.find((p) => p.id === productId);
     const item = billItems.find((i) => i.productId === productId);
     if (!product || !item) return;
-
-
     let newQty = isSet ? delta : item.qty + delta;
-
-
     if (newQty < 0) {
       newQty = 0;
     }
 
+    const availableStock = (product.stock || 0) + item.qty;
 
     if (newQty > product.stock) {
       setPopupContent({
