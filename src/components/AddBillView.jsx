@@ -34,6 +34,10 @@ const AddBillView = ({
   const [promotions, setPromotions] = useState([]);
 
   useEffect(() => {
+  loadData();
+}, []);
+
+  useEffect(() => {
     localStorage.setItem('draft_add_items', JSON.stringify(billItems));
   }, [billItems]);
 
