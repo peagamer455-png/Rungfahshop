@@ -8,33 +8,18 @@ const BillItemRow = ({ item, onUpdateQty, onRemove, setPopupContent, setShowPopu
 
     const handleInputChange = (e) => {
         const value = e.target.value;
-
         if (value === "") {
             onUpdateQty(item.productId, "", true);
             return;
         }
-
         let newQty = parseInt(value, 10);
         if (isNaN(newQty) || newQty < 0) return;
-
-        if (newQty > stock) {
-            newQty = stock;
-            setPopupContent({ title: "❌ สินค้าหมด", message: "ขออภัยครับ สินค้านี้สต็อกหมดแล้ว", color: "red" });
-            setShowPopup(true);
-        }
-
         onUpdateQty(item.productId, newQty, true);
     };
 
     const handlePlus = () => {
-        if (item.qty < stock) {
-            onUpdateQty(item.productId, 1, false);
-        } else {
-            setPopupContent({ title: "❌ สินค้าหมด", message: "ขออภัยครับ สินค้านี้สต็อกหมดแล้ว", color: "red" });
-            setShowPopup(true);
-        }
+        onUpdateQty(item.productId, 1, false); // ✅ ไม่เช็ค stock ที่นี่อีกต่อไป
     };
-
 
     return (
         <div className="flex items-center justify-between p-3 border border-green-100 rounded-lg bg-green-50 shadow-sm transition-all">
