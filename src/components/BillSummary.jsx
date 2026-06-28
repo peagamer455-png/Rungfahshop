@@ -33,6 +33,10 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
     const netTotal = Math.max(0, subTotal - discount);
     const [receivedAmount, setReceivedAmount] = useState(0);
 
+    const [paymentMethod, setPaymentMethod] = useState(
+    initialPaymentDetails?.method || "cash"
+    );
+
     const handlePrintSizeChange = (size) => {
         setPrintSize(size);
         localStorage.setItem('lastPrintSize', size);
