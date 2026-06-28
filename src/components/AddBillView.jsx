@@ -127,6 +127,7 @@ const AddBillView = ({
     if (newQty < 0) newQty = 0;
 
     const availableStock = (product.stock || 0) + item.qty;
+    console.log(`[stock check] product.stock=${product.stock}, item.qty=${item.qty}, availableStock=${availableStock}, newQty=${newQty}`);
 
     if (newQty > availableStock) {
         setPopupContent({
