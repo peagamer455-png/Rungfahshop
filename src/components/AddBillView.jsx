@@ -336,22 +336,29 @@ const AddBillView = ({
   }, [searchTerm, products, billItems]);
 
   const handleBarcodeScan = useCallback((barcode) => {
-    const translatedBarcode = translateBarcode(barcode);
-    const foundProduct = products.find(
-      (p) => String(p.id) === String(translatedBarcode) || String(p.barcode) === String(barcode)
-    );
+  const translatedBarcode = translateBarcode(barcode);
 
-    if (foundProduct) {
-      addItemToBill(foundProduct); // ตอนนี้จะไม่มี Error แล้ว
-    } else {
-      setPopupContent({
-        title: "🔍 ไม่พบสินค้า",
-        message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${translatedBarcode}`,
-        color: "yellow"
-      });
-      setShowPopup(true);
+  const foundProduct = products.find((p) => {
+    if (p.barcode) {
+      return (
+        String(p.barcode) === String(barcode) ||
+        String(p.barcode) === String(translatedBarcode)
+      );
     }
-  }, [products, addItemToBill, setPopupContent, setShowPopup]);
+    return String(p.id) === String(translatedBarcode);
+  });
+
+  if (foundProduct) {
+    addItemToBill(foundProduct);
+  } else {
+    setPopupContent({
+      title: "🔍 ไม่พบสินค้า",
+      message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${barcode}`,
+      color: "yellow"
+    });
+    setShowPopup(true);
+  }
+}, [products, addItemToBill, setPopupContent, setShowPopup]);
 
   useEffect(() => {
     const handleScanner = (e) => {
