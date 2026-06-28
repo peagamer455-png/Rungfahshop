@@ -359,8 +359,6 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
         return () => window.removeEventListener("keypress", handleScanner);
     }, [handleBarcodeScan]);
 
-    console.log("payment_details:", billToEdit.payment_details);
-
     return (
         <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
             <Header title={`✏️ แก้ไขบิล #${billToEdit.billNumber || String(billToEdit.id).substring(0, 5)}`} />
