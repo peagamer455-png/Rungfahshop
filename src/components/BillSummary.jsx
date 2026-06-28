@@ -35,7 +35,6 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
     return totalsale;
 });
     const netTotal = Math.max(0, subTotal - discount);
-    const [receivedAmount, setReceivedAmount] = useState(0);
 
     const handlePrintSizeChange = (size) => {
         setPrintSize(size);
@@ -43,14 +42,9 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
     };
 
     useEffect(() => {
-        if (payMode === 'cash') setCash(totalsale);
-        else if (payMode === 'transfer') setCash(0);
-    }, [netTotal, payMode]);
-
-    useEffect(() => {
-        if (payMode === 'cash') setCash(netTotal);
-        else if (payMode === 'transfer') setCash(0);
-    }, [netTotal, payMode]);
+    if (payMode === 'cash') setCash(netTotal);
+    else if (payMode === 'transfer') setCash(0);
+}, [netTotal]); // ไม่ใส่ payMode ใน dependency!
 
     const transfer = Math.max(0, netTotal - cash);
 
