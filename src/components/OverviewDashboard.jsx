@@ -194,7 +194,7 @@ const OverviewDashboard = ({ formatCurrency, openPasswordModal, setCurrentPage }
         />
         <StatCard
           title="เฉลี่ย/บิล"
-          value={formatCurrency(stats.totalsale / (stats.totalBills || 1))}
+          value={formatCurrency(stats.totalProfit / (stats.totalBills || 1))}
           icon="📊"
           gradient="bg-gradient-to-br from-violet-500 to-purple-600"
           textColor="text-white"
