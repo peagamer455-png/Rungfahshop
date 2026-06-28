@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { formatCurrency } from '../utils';
 
 const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave, isSubmitting, canSave, theme = 'green', printSize, setPrintSize, initialPaymentDetails }) => {
@@ -45,6 +45,18 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
     if (payMode === 'cash') setCash(netTotal);
     else if (payMode === 'transfer') setCash(0);
 }, [netTotal]); // ไม่ใส่ payMode ใน dependency!
+
+    const isFirstRender = useRef(true);
+
+// แทนที่ useEffect เดิม
+useEffect(() => {
+    if (isFirstRender.current) {
+        isFirstRender.current = false;
+        return;
+    }
+    if (payMode === 'cash') setCash(netTotal);
+    else if (payMode === 'transfer') setCash(0);
+}, [netTotal]);
 
     const transfer = Math.max(0, netTotal - cash);
 
@@ -159,7 +171,7 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
             </div>
 
             <button
-                onClick={() => onSave({ payMode: payMode, paymentDetails: { cash: cashToRecord, transfer }, printSize })}
+                onClick={() => onSave({ payMode, paymentDetails: { method: payMode, cash: cashToRecord, transfer }, printSize })}
                 disabled={!canSave || isSubmitting || (payMode !== 'transfer' && cash < netTotal)}
                 className="w-full mt-4 py-5 bg-white text-black rounded-xl font-black text-xl hover:bg-gray-100 transition-all shadow-xl disabled:opacity-50 border-b-4 border-gray-300"
             >
