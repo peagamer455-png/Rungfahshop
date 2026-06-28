@@ -236,7 +236,8 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
         try {
             const totalAmount = billItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
             const totalcost = billItems.reduce((acc, item) => acc + (item.cost * item.qty), 0);
-            const profit = totalAmount - totalcost;
+            const total_net = totalAmount - discount;
+            const profit = total_net - totalcost;
 
             const finalBill = {
                 ...billToEdit,
@@ -246,11 +247,12 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
                 totalsale: totalAmount,
                 total_amount: totalAmount,
                 totalcost: totalcost,
+                discount: discount,
+                total_net: total_net,
                 profit: profit,
                 status: "completed",
                 payment_details: options.paymentDetails,
                 print_size: printSize,
-                discount: discount,
                 activePromos: activePromos,
             };
             await putData("bills", finalBill);
