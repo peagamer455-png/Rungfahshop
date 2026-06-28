@@ -45,6 +45,10 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
     const [promotions, setPromotions] = useState([]);
 
     useEffect(() => {
+  loadData();
+}, []);
+
+    useEffect(() => {
         localStorage.setItem(draftKey, JSON.stringify(billItems));
     }, [billItems, draftKey]);
 
