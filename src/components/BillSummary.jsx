@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatCurrency } from '../utils';
 
-const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave, isSubmitting, canSave, theme = 'green', printSize, setPrintSize }) => {
+const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave, isSubmitting, canSave, theme = 'green', printSize, setPrintSize, initialPaymentDetails }) => {
     const colors = {
         green: {
             bg: "bg-green-700",
@@ -28,14 +28,10 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
     const btnActive = isGreen ? "bg-green-500" : "bg-yellow-400 text-yellow-900";
     const btnInactive = isGreen ? "bg-green-800" : "bg-yellow-700";
     const c = colors[theme];
-    const [payMode, setPayMode] = useState('cash');
+    const [payMode, setPayMode] = useState(initialPaymentDetails?.method || 'cash');
     const [cash, setCash] = useState(totalsale);
     const netTotal = Math.max(0, subTotal - discount);
     const [receivedAmount, setReceivedAmount] = useState(0);
-
-    const [paymentMethod, setPaymentMethod] = useState(
-    initialPaymentDetails?.method || "cash"
-    );
 
     const handlePrintSizeChange = (size) => {
         setPrintSize(size);
