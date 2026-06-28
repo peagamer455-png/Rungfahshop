@@ -158,14 +158,15 @@ const AddBillView = ({
     const existingItem = billItems.find((i) => i.productId === product.id);
 
     if (existingItem) {
-      updateItemQty(product.id, 1);
-      return;
+        updateItemQty(product.id, 1);  // ✅ ให้ updateItemQty จัดการ stock check เอง
+        return;
     }
 
+    // เช็ค stock เฉพาะตอนเพิ่มสินค้าใหม่เท่านั้น (ยังไม่มีในบิล)
     if ((product.stock || 0) <= 0) {
-      setPopupContent({ title: "❌ สินค้าหมด", message: "สินค้านี้สต็อกหมดแล้วครับ ไม่สามารถเพิ่มลงบิลได้", color: "red" });
-      setShowPopup(true);
-      return;
+        setPopupContent({ title: "❌ สินค้าหมด", message: "สินค้านี้สต็อกหมดแล้วครับ", color: "red" });
+        setShowPopup(true);
+        return;
     }
 
     const newItem = {
