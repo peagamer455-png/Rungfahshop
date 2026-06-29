@@ -338,36 +338,35 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
   const handleScanner = (e) => {
     const currentTime = Date.now();
     const timeDiff = currentTime - lastKeyTimeRef.current;
-
     const isInInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
 
-    // คนพิมพ์เองใน input (ช้ากว่า 150ms) → ไม่ดัก แต่ reset buffer
-    if (isInInput && timeDiff > 150) {
-      barcodeBufferRef.current = "";
-      lastKeyTimeRef.current = currentTime;
-      return;
-    }
-
-    // reset buffer ถ้าหยุดนานเกิน 150ms (scanner หยุดยิง)
-    if (timeDiff > 150) {
-      barcodeBufferRef.current = "";
-    }
-    lastKeyTimeRef.current = currentTime;
-
     if (e.key === "Enter") {
-      if (barcodeBufferRef.current.length >= 1) { // ✅ รับแม้แค่ 1 ตัว
+      if (barcodeBufferRef.current.length >= 1) {
         e.preventDefault();
+        // ถ้าอยู่ใน input ให้ blur ก่อน เพื่อกัน Enter submit
+        if (isInInput) e.target.blur();
         handleBarcodeScan(barcodeBufferRef.current);
         barcodeBufferRef.current = "";
         setSearchTerm("");
       }
-    } else if (e.key.length === 1) {
-      barcodeBufferRef.current += e.key;
+      lastKeyTimeRef.current = 0;
+      return;
     }
+
+    // ตัวอักษรมาเร็ว = scanner → เก็บ buffer และกัน input รับค่า
+    if (timeDiff < 50) {
+      if (isInInput) e.preventDefault(); // ✅ กัน input รับค่า barcode
+      barcodeBufferRef.current += e.key;
+    } else {
+      // มาช้า = คนพิมพ์เอง → reset buffer ปล่อย input ทำงานปกติ
+      barcodeBufferRef.current = e.key; // เริ่ม buffer ใหม่ด้วยตัวนี้
+    }
+
+    lastKeyTimeRef.current = currentTime;
   };
 
-  window.addEventListener("keypress", handleScanner);
-  return () => window.removeEventListener("keypress", handleScanner);
+  window.addEventListener("keydown", handleScanner); // ✅ เปลี่ยนเป็น keydown
+  return () => window.removeEventListener("keydown", handleScanner);
 }, [handleBarcodeScan]);
 
     return (
