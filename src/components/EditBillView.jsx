@@ -343,8 +343,6 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
     if (e.key === "Enter") {
       if (barcodeBufferRef.current.length >= 1) {
         e.preventDefault();
-        // ถ้าอยู่ใน input ให้ blur ก่อน เพื่อกัน Enter submit
-        if (isInInput) e.target.blur();
         handleBarcodeScan(barcodeBufferRef.current);
         barcodeBufferRef.current = "";
         setSearchTerm("");
