@@ -364,32 +364,30 @@ const AddBillView = ({
   const handleScanner = (e) => {
     const currentTime = Date.now();
     const timeDiff = currentTime - lastKeyTimeRef.current;
-    
-    // ถ้า focus อยู่ใน input และพิมพ์ช้า (> 50ms) = คนพิมพ์เอง → ไม่ดัก
+
     const isInInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
-    const isHumanTyping = timeDiff > 50;
-    
-    if (isInInput && isHumanTyping) {
-      barcodeBufferRef.current = ""; // reset buffer ถ้าคนพิมพ์เอง
+
+    // คนพิมพ์เองใน input (ช้ากว่า 150ms) → ไม่ดัก แต่ reset buffer
+    if (isInInput && timeDiff > 150) {
+      barcodeBufferRef.current = "";
       lastKeyTimeRef.current = currentTime;
       return;
     }
 
-    if (currentTime - lastKeyTimeRef.current > 100) {
+    // reset buffer ถ้าหยุดนานเกิน 150ms (scanner หยุดยิง)
+    if (timeDiff > 150) {
       barcodeBufferRef.current = "";
     }
     lastKeyTimeRef.current = currentTime;
 
     if (e.key === "Enter") {
-      e.preventDefault();
-      if (barcodeBufferRef.current.length >= 3) { // barcode มักยาวกว่า 3 ตัว
+      if (barcodeBufferRef.current.length >= 1) { // ✅ รับแม้แค่ 1 ตัว
+        e.preventDefault();
         handleBarcodeScan(barcodeBufferRef.current);
         barcodeBufferRef.current = "";
-        
-        // ล้าง search input ที่อาจรับค่า barcode ไปด้วย
         setSearchTerm("");
       }
-    } else if (e.key.length === 1) { // เฉพาะตัวอักษรที่พิมพ์ได้
+    } else if (e.key.length === 1) {
       barcodeBufferRef.current += e.key;
     }
   };
