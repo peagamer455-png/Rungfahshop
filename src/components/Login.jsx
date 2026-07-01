@@ -32,7 +32,7 @@ const Login = () => {
     };
 
     return (
-        <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-[#0b3d2e] px-4">
+        <div className="min-h-screen relative flex items-center justify-center overflow-hidden bg-[#eef8f1] px-4">
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@500;600;700&family=Sarabun:wght@400;500;600&display=swap');
                 .rf-font-display { font-family: 'Prompt', sans-serif; }
@@ -52,51 +52,63 @@ const Login = () => {
                 @keyframes rf-spin {
                     to { transform: rotate(360deg); }
                 }
+                @keyframes rf-breeze {
+                    0%, 100% { opacity: 0.35; transform: translateX(0); }
+                    50% { opacity: 0.7; transform: translateX(4px); }
+                }
                 @media (prefers-reduced-motion: reduce) {
-                    .rf-blob-a, .rf-blob-b, .rf-card { animation: none !important; }
+                    .rf-blob-a, .rf-blob-b, .rf-card, .rf-breeze-line { animation: none !important; }
                 }
             `}</style>
 
-            {/* พื้นหลังไล่โทนเขียวเข้ม-ฟ้าน้ำแข็ง สื่อถึงความเย็นของแอร์ */}
+            {/* พื้นหลังเขียวอ่อนสบายตา */}
             <div
                 className="absolute inset-0"
                 style={{
-                    background: 'radial-gradient(120% 120% at 15% 10%, #0f5c46 0%, #0b3d2e 45%, #062a20 100%)'
+                    background: 'radial-gradient(120% 120% at 15% 0%, #e3f7ea 0%, #eef8f1 45%, #e8f4ed 100%)'
                 }}
             />
             <div
-                className="rf-blob-a absolute -top-24 -left-20 w-96 h-96 rounded-full opacity-40 blur-3xl"
-                style={{ background: 'radial-gradient(circle, #34d399 0%, transparent 70%)', animation: 'rf-drift 12s ease-in-out infinite' }}
+                className="rf-blob-a absolute -top-20 -left-16 w-96 h-96 rounded-full opacity-50 blur-3xl"
+                style={{ background: 'radial-gradient(circle, #86e0b0 0%, transparent 70%)', animation: 'rf-drift 12s ease-in-out infinite' }}
             />
             <div
-                className="rf-blob-b absolute -bottom-32 -right-16 w-[28rem] h-[28rem] rounded-full opacity-30 blur-3xl"
-                style={{ background: 'radial-gradient(circle, #38bdf8 0%, transparent 70%)', animation: 'rf-drift-slow 14s ease-in-out infinite' }}
+                className="rf-blob-b absolute -bottom-28 -right-14 w-[26rem] h-[26rem] rounded-full opacity-40 blur-3xl"
+                style={{ background: 'radial-gradient(circle, #a7e8d8 0%, transparent 70%)', animation: 'rf-drift-slow 14s ease-in-out infinite' }}
             />
 
-            {/* การ์ดกระจกฝ้า */}
+            {/* การ์ด */}
             <form
                 onSubmit={handleSubmit}
                 className="rf-card relative w-full max-w-[380px] rounded-3xl p-8 sm:p-9"
                 style={{
-                    background: 'rgba(255,255,255,0.97)',
-                    boxShadow: '0 25px 60px -15px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06)',
+                    background: 'rgba(255,255,255,0.92)',
+                    boxShadow: '0 20px 50px -20px rgba(22,101,52,0.25), 0 0 0 1px rgba(22,101,52,0.05)',
                     animation: 'rf-fade-up 0.5s ease-out'
                 }}
             >
-                {/* ตราสัญลักษณ์ */}
+                {/* ตราสัญลักษณ์: เครื่องปรับอากาศ */}
                 <div className="flex justify-center mb-5">
                     <div
-                        className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg"
-                        style={{ background: 'linear-gradient(135deg, #166534 0%, #0d9488 100%)' }}
+                        className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-md relative overflow-hidden"
+                        style={{ background: 'linear-gradient(135deg, #4ade80 0%, #16a34a 100%)' }}
                     >
-                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 2V22M12 2L9 5M12 2L15 5M12 22L9 19M12 22L15 19M2 12H22M2 12L5 9M2 12L5 15M22 12L19 9M22 12L19 15M4.93 4.93L19.07 19.07M4.93 19.07L19.07 4.93"
-                                stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                        <svg width="34" height="34" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            {/* ตัวเครื่องแอร์ผนัง */}
+                            <rect x="6" y="13" width="36" height="14" rx="5" fill="white" />
+                            {/* ไฟสถานะ */}
+                            <circle cx="33" cy="20" r="1.6" fill="#16a34a" />
+                            {/* ช่องลม / บานเกล็ด */}
+                            <line x1="11" y1="20" x2="29" y2="20" stroke="#16a34a" strokeWidth="1.6" strokeLinecap="round" />
+                            {/* ลมเย็นที่พัดออกมา */}
+                            <path className="rf-breeze-line" d="M12 30q4 3 0 6" stroke="white" strokeWidth="2" strokeLinecap="round" style={{ animation: 'rf-breeze 2.2s ease-in-out infinite' }} />
+                            <path className="rf-breeze-line" d="M20 30q4 4 0 8" stroke="white" strokeWidth="2" strokeLinecap="round" style={{ animation: 'rf-breeze 2.2s ease-in-out infinite 0.3s' }} />
+                            <path className="rf-breeze-line" d="M28 30q4 3 0 6" stroke="white" strokeWidth="2" strokeLinecap="round" style={{ animation: 'rf-breeze 2.2s ease-in-out infinite 0.6s' }} />
                         </svg>
                     </div>
                 </div>
 
-                <h1 className="rf-font-display text-center text-[22px] font-bold text-[#0f3d2e] mb-1">
+                <h1 className="rf-font-display text-center text-[22px] font-bold text-[#14532d] mb-1">
                     รุ่งฟ้าแอร์
                 </h1>
                 <p className="rf-font-body text-center text-[13px] text-slate-500 mb-7">
@@ -123,7 +135,7 @@ const Login = () => {
                             onChange={(e) => setUsername(e.target.value)}
                             disabled={loading}
                             placeholder="กรอกชื่อผู้ใช้"
-                            className="rf-font-body w-full pl-10 pr-3.5 py-3 text-[14px] rounded-xl border border-slate-200 bg-slate-50 text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:border-[#0d9488] focus:ring-4 focus:ring-[#0d9488]/10 disabled:opacity-60"
+                            className="rf-font-body w-full pl-10 pr-3.5 py-3 text-[14px] rounded-xl border border-green-100 bg-green-50/50 text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:border-green-400 focus:ring-4 focus:ring-green-200/40 disabled:opacity-60"
                         />
                     </div>
                 </div>
@@ -148,7 +160,7 @@ const Login = () => {
                             onChange={(e) => setPassword(e.target.value)}
                             disabled={loading}
                             placeholder="กรอกรหัสผ่าน"
-                            className="rf-font-body w-full pl-10 pr-11 py-3 text-[14px] rounded-xl border border-slate-200 bg-slate-50 text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:border-[#0d9488] focus:ring-4 focus:ring-[#0d9488]/10 disabled:opacity-60"
+                            className="rf-font-body w-full pl-10 pr-11 py-3 text-[14px] rounded-xl border border-green-100 bg-green-50/50 text-slate-800 placeholder:text-slate-400 outline-none transition-all focus:bg-white focus:border-green-400 focus:ring-4 focus:ring-green-200/40 disabled:opacity-60"
                         />
                         <button
                             type="button"
@@ -175,8 +187,8 @@ const Login = () => {
                 <button
                     type="submit"
                     disabled={loading}
-                    className="rf-font-display w-full mt-6 py-3 rounded-xl text-white text-[14.5px] font-semibold tracking-wide shadow-lg shadow-[#0d9488]/20 transition-all hover:shadow-xl hover:shadow-[#0d9488]/30 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:hover:translate-y-0 flex items-center justify-center gap-2"
-                    style={{ background: 'linear-gradient(135deg, #166534 0%, #0d9488 100%)' }}
+                    className="rf-font-display w-full mt-6 py-3 rounded-xl text-white text-[14.5px] font-semibold tracking-wide shadow-lg shadow-green-500/20 transition-all hover:shadow-xl hover:shadow-green-500/30 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-70 disabled:hover:translate-y-0 flex items-center justify-center gap-2"
+                    style={{ background: 'linear-gradient(135deg, #4ade80 0%, #15803d 100%)' }}
                 >
                     {loading && (
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ animation: 'rf-spin 0.7s linear infinite' }}>
