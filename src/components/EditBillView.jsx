@@ -45,6 +45,10 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
     const [promotions, setPromotions] = useState([]);
 
     useEffect(() => {
+  loadData();
+}, []);
+
+    useEffect(() => {
         localStorage.setItem(draftKey, JSON.stringify(billItems));
     }, [billItems, draftKey]);
 
@@ -97,44 +101,40 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
     }, [billItems, promotions]);
 
     const updateItemQty = async (productId, delta, isSet = false) => {
-        const product = products.find((p) => p.id === productId);
-        const item = billItems.find((i) => i.productId === productId);
-        if (!product || !item) return;
+    const product = products.find((p) => p.id === productId);
+    const item = billItems.find((i) => i.productId === productId);
+    if (!product || !item) return;
 
+    let newQty = isSet ? delta : item.qty + delta;
+    if (newQty < 0) newQty = 0;
 
-        let newQty = isSet ? delta : item.qty + delta;
+    // ✅ stock จริงที่ใช้ได้ = stock ใน DB + จำนวนที่อยู่ในบิลนี้อยู่แล้ว
+    const availableStock = (product.stock || 0) + item.qty;
 
+    if (newQty > availableStock) {
+        setPopupContent({
+            title: "⚠️ สินค้าไม่เพียงพอ",
+            message: `ขออภัยครับ สินค้านี้มีสต็อกทั้งหมด ${availableStock} ชิ้นเท่านั้น`,
+            color: "red"
+        });
+        setShowPopup(true);
+        return;
+    }
 
-        if (newQty < 0) {
-            newQty = 0;
-        }
+    setBillItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty: newQty } : i)));
 
-
-        if (newQty > product.stock) {
-            setPopupContent({
-                title: "⚠️ สินค้าไม่เพียงพอ",
-                message: `ขออภัยครับ สินค้านี้เหลือสต็อกเพียง ${product.stock} ชิ้นเท่านั้น`,
-                color: "red"
-            });
+    if (!isSet) {
+        const { error } = await supabase.rpc(
+            delta > 0 ? "decrement_stock" : "increment_stock",
+            { p_id: parseInt(productId), amount: Math.abs(delta) }
+        );
+        if (error) {
+            setPopupContent({ title: "⚠️ ผิดพลาด", message: "ไม่สามารถอัปเดตสต็อกได้", color: "red" });
             setShowPopup(true);
-            return;
+            loadData();
         }
-
-
-        setBillItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty: newQty } : i)));
-
-        if (!isSet) {
-            const { error } = await supabase.rpc(
-                delta > 0 ? "decrement_stock" : "increment_stock",
-                { p_id: parseInt(productId), amount: Math.abs(delta) }
-            );
-            if (error) {
-                setPopupContent({ title: "⚠️ ผิดพลาด", message: "ไม่สามารถอัปเดตสต็อกได้", color: "red" });
-                setShowPopup(true);
-                loadData();
-            }
-        }
-    };
+    }
+};
 
     const addItemToBill = async (product) => {
         const existingItem = billItems.find((i) => i.productId === product.id);
@@ -236,7 +236,8 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
         try {
             const totalAmount = billItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
             const totalcost = billItems.reduce((acc, item) => acc + (item.cost * item.qty), 0);
-            const profit = totalAmount - totalcost;
+            const total_net = totalAmount - discount;
+            const profit = total_net - totalcost;
 
             const finalBill = {
                 ...billToEdit,
@@ -246,11 +247,12 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
                 totalsale: totalAmount,
                 total_amount: totalAmount,
                 totalcost: totalcost,
+                discount: discount,
+                total_net: total_net,
                 profit: profit,
                 status: "completed",
                 payment_details: options.paymentDetails,
                 print_size: printSize,
-                discount: discount,
                 activePromos: activePromos,
             };
             await putData("bills", finalBill);
@@ -308,47 +310,62 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
     }, [searchTerm, products, billItems]);
 
     const handleBarcodeScan = useCallback((barcode) => {
-        const translatedBarcode = translateBarcode(barcode);
-        const foundProduct = products.find(
-            (p) => String(p.id) === String(translatedBarcode) || String(p.barcode) === String(barcode)
-        );
+  const translatedBarcode = translateBarcode(barcode);
 
-        if (foundProduct) {
-            addItemToBill(foundProduct); // ตอนนี้จะไม่มี Error แล้ว
-        } else {
-            setPopupContent({
-                title: "🔍 ไม่พบสินค้า",
-                message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${translatedBarcode}`,
-                color: "yellow"
-            });
-            setShowPopup(true);
-        }
-    }, [products, addItemToBill, setPopupContent, setShowPopup]);
+  const foundProduct = products.find((p) => {
+    if (p.barcode) {
+      return (
+        String(p.barcode) === String(barcode) ||
+        String(p.barcode) === String(translatedBarcode)
+      );
+    }
+    return String(p.id) === String(translatedBarcode);
+  });
+
+  if (foundProduct) {
+    addItemToBill(foundProduct);
+  } else {
+    setPopupContent({
+      title: "🔍 ไม่พบสินค้า",
+      message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${barcode}`,
+      color: "yellow"
+    });
+    setShowPopup(true);
+  }
+}, [products, addItemToBill, setPopupContent, setShowPopup]);
 
     useEffect(() => {
-        const handleScanner = (e) => {
-            if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  const handleScanner = (e) => {
+    const currentTime = Date.now();
+    const timeDiff = currentTime - lastKeyTimeRef.current;
+    const isInInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
 
-            const currentTime = Date.now();
-            if (currentTime - lastKeyTimeRef.current > 100) {
-                barcodeBufferRef.current = "";
-            }
-            lastKeyTimeRef.current = currentTime;
+    if (e.key === "Enter") {
+      if (barcodeBufferRef.current.length >= 1) {
+        e.preventDefault();
+        handleBarcodeScan(barcodeBufferRef.current);
+        barcodeBufferRef.current = "";
+        setSearchTerm("");
+      }
+      lastKeyTimeRef.current = 0;
+      return;
+    }
 
-            if (e.key === "Enter") {
-                e.preventDefault();
-                if (barcodeBufferRef.current) {
-                    handleBarcodeScan(barcodeBufferRef.current);
-                    barcodeBufferRef.current = "";
-                }
-            } else {
-                barcodeBufferRef.current += e.key;
-            }
-        };
+    // ตัวอักษรมาเร็ว = scanner → เก็บ buffer และกัน input รับค่า
+    if (timeDiff < 50) {
+      if (isInInput) e.preventDefault(); // ✅ กัน input รับค่า barcode
+      barcodeBufferRef.current += e.key;
+    } else {
+      // มาช้า = คนพิมพ์เอง → reset buffer ปล่อย input ทำงานปกติ
+      barcodeBufferRef.current = e.key; // เริ่ม buffer ใหม่ด้วยตัวนี้
+    }
 
-        window.addEventListener("keypress", handleScanner);
-        return () => window.removeEventListener("keypress", handleScanner);
-    }, [handleBarcodeScan]);
+    lastKeyTimeRef.current = currentTime;
+  };
+
+  window.addEventListener("keydown", handleScanner); // ✅ เปลี่ยนเป็น keydown
+  return () => window.removeEventListener("keydown", handleScanner);
+}, [handleBarcodeScan]);
 
     return (
         <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
@@ -453,6 +470,7 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
                             setPrintSize={setPrintSize}
                             discount={discount}
                             activePromos={activePromos}
+                            initialPaymentDetails={billToEdit.payment_details}
                         />
                     </div>
                 </div>

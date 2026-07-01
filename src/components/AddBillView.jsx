@@ -34,6 +34,10 @@ const AddBillView = ({
   const [promotions, setPromotions] = useState([]);
 
   useEffect(() => {
+  loadData();
+}, []);
+
+  useEffect(() => {
     localStorage.setItem('draft_add_items', JSON.stringify(billItems));
   }, [billItems]);
 
@@ -60,7 +64,7 @@ const AddBillView = ({
     fetchPromotions();
   }, []);
 
-  const { subTotal, totalsale, discount, activePromos } = useMemo(() => {
+  const { subTotal, totalsale, discount, activePromos, setSidebarOpen } = useMemo(() => {
     let subTotal = billItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
     let discount = 0;
     let activePromos = [];
@@ -115,57 +119,60 @@ const AddBillView = ({
   }, [billItems, promotions]);
 
   const updateItemQty = async (productId, delta, isSet = false) => {
-    const product = products.find((p) => p.id === productId);
     const item = billItems.find((i) => i.productId === productId);
-    if (!product || !item) return;
-
+    if (!item) return;
 
     let newQty = isSet ? delta : item.qty + delta;
+    if (newQty < 0) newQty = 0;
 
+    // ✅ ดึง stock สดจาก DB โดยตรง ไม่เชื่อ props
+    const { data: freshProduct } = await supabase
+        .from('products')
+        .select('stock')
+        .eq('id', productId)
+        .single();
 
-    if (newQty < 0) {
-      newQty = 0;
+    const currentStock = freshProduct?.stock ?? 0;
+    const availableStock = currentStock + item.qty; // บวก qty ที่อยู่ในบิลกลับมา
+
+    if (newQty > availableStock) {
+        setPopupContent({
+            title: "⚠️ สินค้าไม่เพียงพอ",
+            message: `ขออภัยครับ สินค้านี้มีสต็อกทั้งหมด ${availableStock} ชิ้นเท่านั้น`,
+            color: "red"
+        });
+        setShowPopup(true);
+        return;
     }
-
-
-    if (newQty > product.stock) {
-      setPopupContent({
-        title: "⚠️ สินค้าไม่เพียงพอ",
-        message: `ขออภัยครับ สินค้านี้เหลือสต็อกเพียง ${product.stock} ชิ้นเท่านั้น`,
-        color: "red"
-      });
-      setShowPopup(true);
-      return;
-    }
-
 
     setBillItems((prev) => prev.map((i) => (i.productId === productId ? { ...i, qty: newQty } : i)));
 
     if (!isSet) {
-      const { error } = await supabase.rpc(
-        delta > 0 ? "decrement_stock" : "increment_stock",
-        { p_id: parseInt(productId), amount: Math.abs(delta) }
-      );
-      if (error) {
-        setPopupContent({ title: "⚠️ ผิดพลาด", message: "ไม่สามารถอัปเดตสต็อกได้", color: "red" });
-        setShowPopup(true);
-        loadData();
-      }
+        const { error } = await supabase.rpc(
+            delta > 0 ? "decrement_stock" : "increment_stock",
+            { p_id: parseInt(productId), amount: Math.abs(delta) }
+        );
+        if (error) {
+            setPopupContent({ title: "⚠️ ผิดพลาด", message: "ไม่สามารถอัปเดตสต็อกได้", color: "red" });
+            setShowPopup(true);
+            loadData();
+        }
     }
-  };
+};
 
   const addItemToBill = async (product) => {
     const existingItem = billItems.find((i) => i.productId === product.id);
 
     if (existingItem) {
-      updateItemQty(product.id, 1);
-      return;
+        updateItemQty(product.id, 1);  // ✅ ให้ updateItemQty จัดการ stock check เอง
+        return;
     }
 
+    // เช็ค stock เฉพาะตอนเพิ่มสินค้าใหม่เท่านั้น (ยังไม่มีในบิล)
     if ((product.stock || 0) <= 0) {
-      setPopupContent({ title: "❌ สินค้าหมด", message: "สินค้านี้สต็อกหมดแล้วครับ ไม่สามารถเพิ่มลงบิลได้", color: "red" });
-      setShowPopup(true);
-      return;
+        setPopupContent({ title: "❌ สินค้าหมด", message: "สินค้านี้สต็อกหมดแล้วครับ", color: "red" });
+        setShowPopup(true);
+        return;
     }
 
     const newItem = {
@@ -329,51 +336,66 @@ const AddBillView = ({
   }, [searchTerm, products, billItems]);
 
   const handleBarcodeScan = useCallback((barcode) => {
-    const translatedBarcode = translateBarcode(barcode);
-    const foundProduct = products.find(
-      (p) => String(p.id) === String(translatedBarcode) || String(p.barcode) === String(barcode)
-    );
+  const translatedBarcode = translateBarcode(barcode);
 
-    if (foundProduct) {
-      addItemToBill(foundProduct); // ตอนนี้จะไม่มี Error แล้ว
-    } else {
-      setPopupContent({
-        title: "🔍 ไม่พบสินค้า",
-        message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${translatedBarcode}`,
-        color: "yellow"
-      });
-      setShowPopup(true);
+  const foundProduct = products.find((p) => {
+    if (p.barcode) {
+      return (
+        String(p.barcode) === String(barcode) ||
+        String(p.barcode) === String(translatedBarcode)
+      );
     }
-  }, [products, addItemToBill, setPopupContent, setShowPopup]);
+    return String(p.id) === String(translatedBarcode);
+  });
 
-  useEffect(() => {
-    const handleScanner = (e) => {
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  if (foundProduct) {
+    addItemToBill(foundProduct);
+  } else {
+    setPopupContent({
+      title: "🔍 ไม่พบสินค้า",
+      message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${barcode}`,
+      color: "yellow"
+    });
+    setShowPopup(true);
+  }
+}, [products, addItemToBill, setPopupContent, setShowPopup]);
 
-      const currentTime = Date.now();
-      if (currentTime - lastKeyTimeRef.current > 100) {
-        barcodeBufferRef.current = "";
-      }
-      lastKeyTimeRef.current = currentTime;
+ useEffect(() => {
+  const handleScanner = (e) => {
+    const currentTime = Date.now();
+    const timeDiff = currentTime - lastKeyTimeRef.current;
+    const isInInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
 
-      if (e.key === "Enter") {
+    if (e.key === "Enter") {
+      if (barcodeBufferRef.current.length >= 1) {
         e.preventDefault();
-        if (barcodeBufferRef.current) {
-          handleBarcodeScan(barcodeBufferRef.current);
-          barcodeBufferRef.current = "";
-        }
-      } else {
-        barcodeBufferRef.current += e.key;
+        handleBarcodeScan(barcodeBufferRef.current);
+        barcodeBufferRef.current = "";
+        setSearchTerm("");
       }
-    };
+      lastKeyTimeRef.current = 0;
+      return;
+    }
 
-    window.addEventListener("keypress", handleScanner);
-    return () => window.removeEventListener("keypress", handleScanner);
-  }, [handleBarcodeScan]);
+    // ตัวอักษรมาเร็ว = scanner → เก็บ buffer และกัน input รับค่า
+    if (timeDiff < 50) {
+      if (isInInput) e.preventDefault(); // ✅ กัน input รับค่า barcode
+      barcodeBufferRef.current += e.key;
+    } else {
+      // มาช้า = คนพิมพ์เอง → reset buffer ปล่อย input ทำงานปกติ
+      barcodeBufferRef.current = e.key; // เริ่ม buffer ใหม่ด้วยตัวนี้
+    }
 
+    lastKeyTimeRef.current = currentTime;
+  };
+
+  window.addEventListener("keydown", handleScanner); // ✅ เปลี่ยนเป็น keydown
+  return () => window.removeEventListener("keydown", handleScanner);
+}, [handleBarcodeScan]);
+  
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
-      <Header title="🧾 สร้างบิลใหม่" />
+      <Header title="🧾 สร้างบิลใหม่" onToggleSidebar={() => setSidebarOpen(prev => !prev)}/>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
 
         {/* Left Column: Inputs & Search */}

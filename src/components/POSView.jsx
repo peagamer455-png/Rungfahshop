@@ -15,7 +15,7 @@ const FloatingActionButton = ({ onClick }) => (
     </button>
 );
 
-const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, navigateTo, sensitiveVisible, openPasswordModal, onToggleSensitive }) => {
+const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, navigateTo, sensitiveVisible, openPasswordModal, onToggleSensitive, setSidebarOpen }) => {
     const todayDateString = useMemo(() => new Date().toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), []);
 
     const todayBills = useMemo(() => {
@@ -82,6 +82,7 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
                 date={todayDateString}
                 sensitiveVisible={sensitiveVisible}
                 onToggleSensitive={handleToggleSensitive}
+                onToggleSidebar={() => setSidebarOpen(prev => !prev)}
             />
 
             <div className="p-4 sm:p-6">

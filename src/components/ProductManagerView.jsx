@@ -12,6 +12,7 @@ const ProductManagerView = ({
   openPasswordModal,
   setPopupContent,
   setShowPopup,
+  setSidebarOpen
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [currentProduct, setCurrentProduct] = useState({
@@ -303,7 +304,15 @@ const ProductManagerView = ({
           .eq("id", currentProduct.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("products").insert([payload]);
+        const { data: maxData } = await supabase
+          .from("products")
+          .select("id")
+          .order("id", { ascending: false })
+          .limit(1)
+          .single();
+        const nextId = (maxData?.id ?? 0) + 1;
+        
+        const { error } = await supabase.from("products").insert([{ ...payload, id: nextId }]);
         if (error) throw error;
       }
 
@@ -392,6 +401,7 @@ const ProductManagerView = ({
           title={currentProduct.id ? "✏️ แก้ไขสินค้า" : "➕ เพิ่มสินค้าใหม่"}
           sensitiveVisible={sensitiveVisible}
           onToggleSensitive={handleToggleSensitive}
+          onToggleSidebar={() => setSidebarOpen(prev => !prev)}
         />
         {importProgress > 0 && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
@@ -549,6 +559,7 @@ const ProductManagerView = ({
         title="📦 จัดการสินค้า"
         sensitiveVisible={sensitiveVisible}
         onToggleSensitive={handleToggleSensitive}
+        onToggleSidebar={() => setSidebarOpen(prev => !prev)}
       />
       {importProgress > 0 && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">

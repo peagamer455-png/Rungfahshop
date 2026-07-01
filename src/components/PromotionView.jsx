@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { Header } from "./SharedUI";
 
-const PromotionView = ({ products, setPopupContent, setShowPopup }) => {
+const PromotionView = ({ products, setPopupContent, setShowPopup, setSidebarOpen}) => {
   const [promotions, setPromotions] = useState([]);
   const [formData, setFormData] = useState({
     name: '', type: 'qty', items: [], minQty: 1, discountPrice: ''
@@ -273,7 +274,7 @@ const PromotionView = ({ products, setPopupContent, setShowPopup }) => {
 
   return (
     <div className="p-4 sm:p-8 bg-gray-50 min-h-screen">
-      <h1 className="text-2xl font-bold text-gray-800 mb-8">🎁 จัดการโปรโมชั่น</h1>
+      <Header title={`🎁 จัดการโปรโมชั่น`} onToggleSidebar={() => setSidebarOpen(prev => !prev)}/>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1">{renderForm()}</div>
         <div className="lg:col-span-2">{renderList()}</div>

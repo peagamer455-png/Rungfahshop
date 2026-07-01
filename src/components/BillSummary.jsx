@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { formatCurrency } from '../utils';
 
-const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave, isSubmitting, canSave, theme = 'green', printSize, setPrintSize }) => {
+const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave, isSubmitting, canSave, theme = 'green', printSize, setPrintSize, initialPaymentDetails }) => {
     const colors = {
         green: {
             bg: "bg-green-700",
@@ -28,10 +28,13 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
     const btnActive = isGreen ? "bg-green-500" : "bg-yellow-400 text-yellow-900";
     const btnInactive = isGreen ? "bg-green-800" : "bg-yellow-700";
     const c = colors[theme];
-    const [payMode, setPayMode] = useState('cash');
-    const [cash, setCash] = useState(totalsale);
+    const [payMode, setPayMode] = useState(initialPaymentDetails?.method || 'cash');
+    const [cash, setCash] = useState(() => {
+    if (initialPaymentDetails?.method === 'transfer') return 0;
+    if (initialPaymentDetails?.cash != null) return initialPaymentDetails.cash;
+    return totalsale;
+});
     const netTotal = Math.max(0, subTotal - discount);
-    const [receivedAmount, setReceivedAmount] = useState(0);
 
     const handlePrintSizeChange = (size) => {
         setPrintSize(size);
@@ -39,14 +42,21 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
     };
 
     useEffect(() => {
-        if (payMode === 'cash') setCash(totalsale);
-        else if (payMode === 'transfer') setCash(0);
-    }, [netTotal, payMode]);
+    if (payMode === 'cash') setCash(netTotal);
+    else if (payMode === 'transfer') setCash(0);
+}, [netTotal]); // ไม่ใส่ payMode ใน dependency!
 
-    useEffect(() => {
-        if (payMode === 'cash') setCash(netTotal);
-        else if (payMode === 'transfer') setCash(0);
-    }, [netTotal, payMode]);
+    const isFirstRender = useRef(true);
+
+// แทนที่ useEffect เดิม
+useEffect(() => {
+    if (isFirstRender.current) {
+        isFirstRender.current = false;
+        return;
+    }
+    if (payMode === 'cash') setCash(netTotal);
+    else if (payMode === 'transfer') setCash(0);
+}, [netTotal]);
 
     const transfer = Math.max(0, netTotal - cash);
 
@@ -161,8 +171,8 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
             </div>
 
             <button
-                onClick={() => onSave({ payMode: payMode, paymentDetails: { cash: cashToRecord, transfer }, printSize })}
-                disabled={!canSave || isSubmitting || cash < netTotal}
+                onClick={() => onSave({ payMode, paymentDetails: { method: payMode, cash: cashToRecord, transfer }, printSize })}
+                disabled={!canSave || isSubmitting || (payMode !== 'transfer' && cash < netTotal)}
                 className="w-full mt-4 py-5 bg-white text-black rounded-xl font-black text-xl hover:bg-gray-100 transition-all shadow-xl disabled:opacity-50 border-b-4 border-gray-300"
             >
                 {isSubmitting ? 'กำลังบันทึก...' : '💾 บันทึกข้อมูล'}

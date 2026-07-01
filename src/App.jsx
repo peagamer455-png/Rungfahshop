@@ -14,8 +14,12 @@ import AddBillView from "./components/AddBillView";
 import { formatCurrency } from "./utils";
 import BillDetailView from "./components/BillDetailView";
 import EditBillView from "./components/EditBillView";
+import { useAuth } from "./contexts/AuthContext";
+import Login from "./components/Login";
 
 const App = () => {
+  const { session, loading: authLoading, logout } = useAuth();
+
   const [products, setProducts] = useState([]);
   const [bills, setBills] = useState([]);
   const [sensitiveVisible, setSensitiveVisible] = useState(false);
@@ -88,10 +92,11 @@ const App = () => {
   }, [loadData]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (session) loadData();
+  }, [loadData, session]);
 
   useEffect(() => {
+    if (!session) return;
     const channel = supabase
       .channel('bills-realtime')
       .on(
@@ -106,9 +111,10 @@ const App = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadData]);
+  }, [loadData, session]);
 
   useEffect(() => {
+    if (!session) return;
     const channel = supabase
       .channel('db-realtime')
       .on(
@@ -126,7 +132,7 @@ const App = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadData]);
+  }, [loadData, session]);
 
   const openPasswordModal = (onSuccess) => {
     setPasswordOnSuccess(() => onSuccess);
@@ -144,6 +150,9 @@ const App = () => {
     }
   };
 
+  // ---- Auth gate: เช็คก่อนทุกอย่าง ----
+  if (authLoading) return <LoadingSpinner />;
+  if (!session) return <Login />;
   if (!isDbReady) return <LoadingSpinner />;
 
   return (
@@ -151,7 +160,23 @@ const App = () => {
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
       <div className="flex-1 lg:pl-64">
-        {/* ส่งค่า sensitiveVisible และฟังก์ชัน requestPasswordAndToggle เข้าไป */}
+        {/* ปุ่มออกจากระบบ */}
+        <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 16px" }}>
+          <button
+            onClick={logout}
+            style={{
+              fontSize: "12px",
+              color: "#666",
+              background: "transparent",
+              border: "1px solid #ddd",
+              borderRadius: "6px",
+              padding: "6px 12px",
+              cursor: "pointer",
+            }}
+          >
+            ออกจากระบบ
+          </button>
+        </div>
 
         <main className="p-4">
           <Routes>
@@ -168,6 +193,7 @@ const App = () => {
                   openPasswordModal={openPasswordModal}
                   onToggleSensitive={requestPasswordAndToggle}
                   navigateTo={handleNavigate}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -180,6 +206,7 @@ const App = () => {
                   setPopupContent={setPopupContent}
                   setShowPopup={setShowPopup}
                   navigateTo={handleNavigate}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -192,9 +219,10 @@ const App = () => {
                   loadData={loadData}
                   setPopupContent={setPopupContent}
                   setShowPopup={setShowPopup}
+                  setSidebarOpen={setIsSidebarOpen}
                   showBillDetails={(id) => {
                     setCurrentBillId(id);
-                    navigate('/bill-detail');
+                    navigate(`/bill-detail?id=${id}`);
                   }}
                 />
               }
@@ -206,6 +234,7 @@ const App = () => {
                   products={products}
                   setPopupContent={setPopupContent}
                   setShowPopup={setShowPopup}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -228,6 +257,7 @@ const App = () => {
                   setPopupContent={setPopupContent}
                   openPasswordModal={openPasswordModal}
                   setShowPopup={setShowPopup}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -244,6 +274,7 @@ const App = () => {
                   setShowPopup={setShowPopup}
                   sensitiveVisible={sensitiveVisible}
                   onToggleSensitive={() => setSensitiveVisible(!sensitiveVisible)}
+                  setSidebarOpen={setIsSidebarOpen}  
                 />
               }
             />
@@ -259,6 +290,7 @@ const App = () => {
                   navigateTo={handleNavigate}
                   setShowPopup={setShowPopup}
                   setPopupContent={setPopupContent}
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
