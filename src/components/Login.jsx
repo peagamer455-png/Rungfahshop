@@ -109,7 +109,7 @@ const Login = () => {
                 </div>
 
                 <h1 className="rf-font-display text-center text-[22px] font-bold text-[#14532d] mb-1">
-                    รุ่งฟ้าแอร์
+                    ระบบจัดการขายรุ่งฟ้าแอร์
                 </h1>
                 <p className="rf-font-body text-center text-[13px] text-slate-500 mb-7">
                     เข้าสู่ระบบเพื่อเปิดหน้าขาย
