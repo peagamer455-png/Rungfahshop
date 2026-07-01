@@ -32,7 +32,10 @@ const printReceipt = (billData) => {
             <span>เลขที่: ${fileIdentifier}</span>
             <span>${formatDate(billData.date)}</span>
         </div>
-        <div style="font-size: 10px; margin-bottom: 5px;">ลูกค้า: ${billData.customer || 'ทั่วไป'}</div>
+        <div style="font-size: 10px; margin-bottom: 5px;">
+            ลูกค้า: ${billData.customer || 'ทั่วไป'}
+            ${billData.customer_detail ? `<br>${billData.customer_detail}` : ''}
+        </div>
         
         <div style="border-top: 1px dashed #000; margin: 5px 0;"></div>
         
