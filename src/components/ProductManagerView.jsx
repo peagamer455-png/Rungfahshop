@@ -441,41 +441,51 @@ const ProductManagerView = ({
 
             {/* ราคาขาย / ราคาทุน */}
             <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  ราคาขาย
-                </label>
-                <input
-                  type="number"
-                  value={currentProduct.price}
-                  onChange={(e) =>
-                    setCurrentProduct({
-                      ...currentProduct,
-                      price: e.target.value,
-                    })
-                  }
-                  className="w-full p-3 border rounded-lg"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  ราคาทุน
-                </label>
-                <input
-                  type="number"
-                  value={currentProduct.cost}
-                  onChange={(e) =>
-                    setCurrentProduct({
-                      ...currentProduct,
-                      cost: e.target.value,
-                    })
-                  }
-                  className="w-full p-3 border rounded-lg"
-                  required
-                />
-              </div>
-            </div>
+  <div>
+    <label className="block text-sm font-medium text-gray-700">ราคาขาย</label>
+    <input
+      type="number"
+      value={currentProduct.price}
+      onChange={(e) => setCurrentProduct({ ...currentProduct, price: e.target.value })}
+      className="w-full p-3 border rounded-lg"
+      required
+    />
+  </div>
+  <div>
+    <label className="block text-sm font-medium text-gray-700">ราคาทุน</label>
+    {sensitiveVisible ? (
+      <input
+        type="number"
+        value={currentProduct.cost}
+        onChange={(e) => setCurrentProduct({ ...currentProduct, cost: e.target.value })}
+        className="w-full p-3 border rounded-lg"
+        required
+      />
+    ) : (
+      <button
+        type="button"
+        onClick={handleToggleSensitive}
+        className="w-full p-3 border rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center gap-2 hover:bg-gray-200 transition"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth={2}
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"
+          />
+        </svg>
+        ใส่รหัสเพื่อดู/แก้ไข
+      </button>
+    )}
+  </div>
+</div>
 
             {/* สต็อก */}
             <div>
