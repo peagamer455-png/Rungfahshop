@@ -280,7 +280,25 @@ const AddBillView = ({
         print_size: options.printSize,
         activePromos: activePromos,
       };
-      await putData("bills", finalBill);
+
+      const saveResult = await putData("bills", finalBill);
+
+      // ✅ รองรับหลายรูปแบบผลลัพธ์ที่ putData อาจ return กลับมา
+      // เช่น row ตรงๆ {id,...}, array [{id,...}], หรือ {data: {...}} / {data: [...]}
+      let savedRow = null;
+      if (saveResult) {
+        if (Array.isArray(saveResult)) {
+          savedRow = saveResult[0] || null;
+        } else if (saveResult.data) {
+          savedRow = Array.isArray(saveResult.data) ? saveResult.data[0] : saveResult.data;
+        } else {
+          savedRow = saveResult;
+        }
+      }
+
+      // ✅ รวมข้อมูลบิลที่บันทึกไปกับ id/bill_number ที่ได้จาก DB (ถ้ามี)
+      const billForPrint = savedRow ? { ...finalBill, ...savedRow } : finalBill;
+
       await loadData();
       clearDraft();
       setPopupContent({
@@ -293,7 +311,7 @@ const AddBillView = ({
             label: "🖨️ พิมพ์บิลทันที",
             variant: "success",
             handler: () => {
-              handlePrint(finalBill);
+              handlePrint(billForPrint);
               setShowPopup(false);
               navigateTo("/");
             }
