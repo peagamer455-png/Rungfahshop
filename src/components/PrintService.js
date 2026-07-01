@@ -34,7 +34,7 @@ const printReceipt = (billData) => {
         </div>
         <div style="font-size: 10px; margin-bottom: 5px;">
             ลูกค้า: ${billData.customer || 'ทั่วไป'}
-            ${billData.customer_detail ? `<br>${billData.customer_detail}` : ''}
+            ${billData.customer_detail ? `<br>ข้อมูลเพิ่มเติม: ${billData.customer_detail}` : ''}
         </div>
         
         <div style="border-top: 1px dashed #000; margin: 5px 0;"></div>
