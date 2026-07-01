@@ -18,7 +18,7 @@ import { useAuth } from "./contexts/AuthContext";
 import Login from "./components/Login";
 
 const App = () => {
-  const { session, loading: authLoading, logout } = useAuth();
+  const { session, loading: authLoading } = useAuth();
 
   const [products, setProducts] = useState([]);
   const [bills, setBills] = useState([]);
@@ -160,24 +160,6 @@ const App = () => {
       <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
       <div className="flex-1 lg:pl-64">
-        {/* ปุ่มออกจากระบบ */}
-        <div style={{ display: "flex", justifyContent: "flex-end", padding: "8px 16px" }}>
-          <button
-            onClick={logout}
-            style={{
-              fontSize: "12px",
-              color: "#666",
-              background: "transparent",
-              border: "1px solid #ddd",
-              borderRadius: "6px",
-              padding: "6px 12px",
-              cursor: "pointer",
-            }}
-          >
-            ออกจากระบบ
-          </button>
-        </div>
-
         <main className="p-4">
           <Routes>
             <Route
