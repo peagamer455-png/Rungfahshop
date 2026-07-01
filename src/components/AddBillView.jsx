@@ -281,23 +281,13 @@ const AddBillView = ({
         activePromos: activePromos,
       };
 
-      const saveResult = await putData("bills", finalBill);
+      // putData("bills", finalBill) return แค่ id เดี่ยวๆ (result.id) ไม่ใช่ object ทั้งแถว
+      const savedId = await putData("bills", finalBill);
 
-      // ✅ รองรับหลายรูปแบบผลลัพธ์ที่ putData อาจ return กลับมา
-      // เช่น row ตรงๆ {id,...}, array [{id,...}], หรือ {data: {...}} / {data: [...]}
-      let savedRow = null;
-      if (saveResult) {
-        if (Array.isArray(saveResult)) {
-          savedRow = saveResult[0] || null;
-        } else if (saveResult.data) {
-          savedRow = Array.isArray(saveResult.data) ? saveResult.data[0] : saveResult.data;
-        } else {
-          savedRow = saveResult;
-        }
-      }
-
-      // ✅ รวมข้อมูลบิลที่บันทึกไปกับ id/bill_number ที่ได้จาก DB (ถ้ามี)
-      const billForPrint = savedRow ? { ...finalBill, ...savedRow } : finalBill;
+      // ✅ รวม id ที่ได้จาก DB เข้ากับข้อมูลบิล เพื่อให้พิมพ์ได้เลขบิลที่ถูกต้อง
+      const billForPrint = savedId
+        ? { ...finalBill, id: savedId, bill_number: savedId }
+        : finalBill;
 
       await loadData();
       clearDraft();
