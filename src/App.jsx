@@ -22,6 +22,7 @@ const App = () => {
 
   const [products, setProducts] = useState([]);
   const [bills, setBills] = useState([]);
+  const [promotions, setPromotions] = useState([]);
   const [sensitiveVisible, setSensitiveVisible] = useState(false);
   const [isDbReady, setIsDbReady] = useState(false);
   const navigate = useNavigate();
@@ -60,8 +61,14 @@ const App = () => {
 
       if (bErr) throw bErr;
 
+      const { data: promotionsData, error: promoErr } = await supabase
+        .from("promotions")
+        .select("*");
+      if (promoErr) throw promoErr;
+
       setProducts(productsData || []);
       setBills(billsData || []);
+      setPromotions(promotionsData || []);
       setIsDbReady(true);
     } catch (e) {
       console.error("Supabase load failed:", e);
@@ -127,6 +134,11 @@ const App = () => {
         { event: '*', schema: 'public', table: 'products' },
         () => loadData()
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'promotions' },
+        () => loadData()
+      )
       .subscribe();
 
     return () => {
@@ -168,6 +180,7 @@ const App = () => {
                 <POSView
                   products={products}
                   bills={bills}
+                  promotions={promotions}
                   loadData={loadData}
                   setPopupContent={setPopupContent}
                   setShowPopup={setShowPopup}
