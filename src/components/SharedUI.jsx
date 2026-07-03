@@ -84,14 +84,21 @@ export const Header = ({
 );
 
 // 3. Modal Popup
-export const ModalPopup = ({ isOpen, title, message, onClose, actions }) => {
+export const ModalPopup = ({ isOpen, title, message, onClose, actions, size }) => {
   if (!isOpen) return null;
+
+  // ✅ ขนาดกล่อง ปรับได้ผ่าน prop size (ไม่ระบุ = เท่าเดิม)
+  const sizeClass = {
+    sm: 'max-w-sm',
+    md: 'max-w-lg',
+    lg: 'max-w-2xl',
+    xl: 'max-w-4xl',
+  }[size] || 'max-w-sm';
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
+      <div className={`bg-white rounded-xl shadow-2xl w-full ${sizeClass} p-6`}>
         <h3 className="text-lg font-bold text-gray-800 mb-2">{title}</h3>
-        {/* ✅ เปลี่ยนจาก <p> เป็น <div> เพื่อรองรับ message ที่เป็น JSX (table) */}
         <div className="text-gray-600 mb-6 text-sm">{message}</div>
         <div className="flex justify-end space-x-2">
           {actions ? actions.map((action, index) => (
