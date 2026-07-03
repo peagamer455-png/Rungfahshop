@@ -116,19 +116,74 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
 
     list.sort((a, b) => b.amount - a.amount);
 
+    // ✅ แยกเป็น 2 กลุ่มไว้แสดงผลแยกกัน: ราคาปกติ / โปรโมชั่น
+    const normalList = list.filter(g => !g.isPromo).sort((a, b) => b.amount - a.amount);
+    const promoList = list.filter(g => g.isPromo).sort((a, b) => b.amount - a.amount);
+
     const grandTotal = list.reduce((sum, g) => sum + g.amount, 0);
     const grandQty = list.reduce((sum, g) => sum + g.qty, 0);
 
-    return { list, grandTotal, grandQty };
+    const normalTotal = normalList.reduce((sum, g) => sum + g.amount, 0);
+    const normalQty = normalList.reduce((sum, g) => sum + g.qty, 0);
+    const promoTotal = promoList.reduce((sum, g) => sum + g.amount, 0);
+    const promoQty = promoList.reduce((sum, g) => sum + g.qty, 0);
+
+    return {
+        list,
+        normalList,
+        promoList,
+        grandTotal,
+        grandQty,
+        normalTotal,
+        normalQty,
+        promoTotal,
+        promoQty,
+    };
 }, [todayBills]);
 
     // ฟังก์ชันจัดการการคลิกเปิด/ปิดข้อมูล Sensitive
     const handleToggleSensitive = () => {
         onToggleSensitive();
     };
-    
+
     const openProductSummary = () => {
-    const { list, grandTotal, grandQty } = productSalesSummary;
+    const {
+        normalList,
+        promoList,
+        grandTotal,
+        grandQty,
+        normalTotal,
+        promoTotal,
+    } = productSalesSummary;
+
+    const renderTable = (items, subtotal) => (
+        <table className="w-full text-base mb-2">
+            <thead>
+                <tr className="text-left text-gray-500 border-b">
+                    <th className="py-3 pr-2">สินค้า</th>
+                    <th className="py-3 px-2 text-right">จำนวน</th>
+                    <th className="py-3 px-2 text-right">ราคา/ชิ้น</th>
+                    <th className="py-3 pl-2 text-right">รวม</th>
+                </tr>
+            </thead>
+            <tbody>
+                {items.map((item, idx) => (
+                    <tr key={idx} className="border-b last:border-b-0 hover:bg-gray-50">
+                        <td className="py-3 pr-2 font-medium text-gray-800">{item.name}</td>
+                        <td className="py-3 px-2 text-right text-gray-600">{item.qty}</td>
+                        <td className="py-3 px-2 text-right text-gray-600">{formatCurrency(item.price)}</td>
+                        <td className="py-3 pl-2 text-right font-semibold text-green-700">{formatCurrency(item.amount)}</td>
+                    </tr>
+                ))}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colSpan={3} className="pt-2 text-right text-gray-500 text-sm">รวม</td>
+                    <td className="pt-2 text-right font-bold text-green-700">{formatCurrency(subtotal)}</td>
+                </tr>
+            </tfoot>
+        </table>
+    );
 
     setPopupContent({
         title: "📦 สรุปสินค้าที่ขายวันนี้",
@@ -136,39 +191,28 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
         size: "xl",
         message: (
             <div className="max-h-[65vh] overflow-y-auto -mx-1 px-1">
-                {list.length === 0 ? (
+                {normalList.length === 0 && promoList.length === 0 ? (
                     <p className="text-center text-gray-500 py-8">วันนี้ยังไม่มีรายการขาย</p>
                 ) : (
                     <>
-                        <table className="w-full text-base">
-                            <thead>
-                                <tr className="text-left text-gray-500 border-b">
-                                    <th className="py-3 pr-2">สินค้า</th>
-                                    <th className="py-3 px-2 text-right">จำนวน</th>
-                                    <th className="py-3 px-2 text-right">ราคา/ชิ้น</th>
-                                    <th className="py-3 pl-2 text-right">รวม</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {list.map((item, idx) => (
-                                    <tr key={idx} className="border-b last:border-b-0 hover:bg-gray-50">
-                                        <td className="py-3 pr-2 font-medium text-gray-800">
-                                            {item.name}
-                                            {item.isPromo && (
-                                                <span className="ml-2 inline-block px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full">
-                                                    โปรโมชั่น
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="py-3 px-2 text-right text-gray-600">{item.qty}</td>
-                                        <td className="py-3 px-2 text-right text-gray-600">{formatCurrency(item.price)}</td>
-                                        <td className="py-3 pl-2 text-right font-semibold text-green-700">{formatCurrency(item.amount)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        {normalList.length > 0 && (
+                            <div className="mb-6">
+                                <h3 className="font-semibold text-gray-700 mb-2">🏷️ ราคาปกติ</h3>
+                                {renderTable(normalList, normalTotal)}
+                            </div>
+                        )}
+
+                        {promoList.length > 0 && (
+                            <div className="mb-6">
+                                <h3 className="font-semibold text-amber-700 mb-2">🔖 โปรโมชั่น</h3>
+                                {renderTable(promoList, promoTotal)}
+                            </div>
+                        )}
+
                         <div className="flex justify-between items-center mt-5 pt-4 border-t-2 border-gray-200">
-                            <span className="text-gray-600">รวม {list.length} รายการ / {grandQty} ชิ้น</span>
+                            <span className="text-gray-600">
+                                รวม {normalList.length + promoList.length} รายการ / {grandQty} ชิ้น
+                            </span>
                             <span className="text-xl font-bold text-green-700">{formatCurrency(grandTotal)}</span>
                         </div>
                     </>
