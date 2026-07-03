@@ -368,11 +368,15 @@ const AddBillView = ({
   }
 }, [products, addItemToBill, setPopupContent, setShowPopup]);
 
- useEffect(() => {
+useEffect(() => {
+  const SCAN_THRESHOLD_MS = 50;
+
   const handleScanner = (e) => {
     const currentTime = Date.now();
     const timeDiff = currentTime - lastKeyTimeRef.current;
     const isInInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+    const isFastKey = timeDiff < SCAN_THRESHOLD_MS;
+    const hasBufferedChars = barcodeBufferRef.current.length > 0;
 
     if (e.key === "Enter") {
       if (barcodeBufferRef.current.length >= 1) {
@@ -385,19 +389,22 @@ const AddBillView = ({
       return;
     }
 
-    // ตัวอักษรมาเร็ว = scanner → เก็บ buffer และกัน input รับค่า
-    if (timeDiff < 50) {
-      if (isInInput) e.preventDefault(); // ✅ กัน input รับค่า barcode
+    // ถือว่า "กำลังสแกนอยู่" ถ้า: คีย์มาเร็ว หรือ buffer มีของค้างอยู่แล้ว (แปลว่ากำลังกลางสแกน)
+    const isScanning = isFastKey || hasBufferedChars;
+
+    if (isScanning) {
+      // กันตัวอักษรทุกตัวไม่ให้หลุดเข้า input ระหว่างสแกน รวมถึงตัวแรกด้วย
+      if (isInInput) e.preventDefault();
       barcodeBufferRef.current += e.key;
     } else {
-      // มาช้า = คนพิมพ์เอง → reset buffer ปล่อย input ทำงานปกติ
-      barcodeBufferRef.current = e.key; // เริ่ม buffer ใหม่ด้วยตัวนี้
+      // คนพิมพ์เองจริงๆ (buffer ว่าง และคีย์มาช้า)
+      barcodeBufferRef.current = e.key;
     }
 
     lastKeyTimeRef.current = currentTime;
   };
 
-  window.addEventListener("keydown", handleScanner); // ✅ เปลี่ยนเป็น keydown
+  window.addEventListener("keydown", handleScanner);
   return () => window.removeEventListener("keydown", handleScanner);
 }, [handleBarcodeScan]);
   
