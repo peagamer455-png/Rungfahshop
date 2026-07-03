@@ -372,32 +372,43 @@ useEffect(() => {
   const SCAN_THRESHOLD_MS = 50;
 
   const handleScanner = (e) => {
-    const currentTime = Date.now();
-    const timeDiff = currentTime - lastKeyTimeRef.current;
     const isInInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
-    const isFastKey = timeDiff < SCAN_THRESHOLD_MS;
-    const hasBufferedChars = barcodeBufferRef.current.length > 0;
 
+    // Enter = จบการสแกน (หรือกด Enter เฉยๆ ตอนพิมพ์ปกติ)
     if (e.key === "Enter") {
-      if (barcodeBufferRef.current.length >= 1) {
+      if (barcodeBufferRef.current.length >= 3) {
         e.preventDefault();
         handleBarcodeScan(barcodeBufferRef.current);
-        barcodeBufferRef.current = "";
-        setSearchTerm("");
+        setSearchTerm(""); // เคลียร์ตัวอักษรที่อาจหลุดเข้าไปก่อนหน้า
       }
+      barcodeBufferRef.current = "";
       lastKeyTimeRef.current = 0;
       return;
     }
 
-    // ถือว่า "กำลังสแกนอยู่" ถ้า: คีย์มาเร็ว หรือ buffer มีของค้างอยู่แล้ว (แปลว่ากำลังกลางสแกน)
-    const isScanning = isFastKey || hasBufferedChars;
+    // ✅ ปล่อยปุ่มพิเศษผ่านไปเลย ไม่ยุ่งกับ buffer/timing
+    // Backspace, Delete, Shift, Tab, ลูกศร ฯลฯ จะมี e.key.length !== 1
+    if (e.key.length !== 1) {
+      return;
+    }
 
-    if (isScanning) {
-      // กันตัวอักษรทุกตัวไม่ให้หลุดเข้า input ระหว่างสแกน รวมถึงตัวแรกด้วย
+    const currentTime = Date.now();
+    const timeDiff = currentTime - lastKeyTimeRef.current;
+
+    // ถือว่าเป็นการสแกนต่อเนื่อง ก็ต่อเมื่อ buffer มีของ "และ" คีย์มาเร็วจริงๆ
+    const isContinuingFastSequence =
+      timeDiff < SCAN_THRESHOLD_MS && barcodeBufferRef.current.length > 0;
+
+    if (isContinuingFastSequence) {
       if (isInInput) e.preventDefault();
       barcodeBufferRef.current += e.key;
+
+      // ถ้าเพิ่งยืนยันว่าเป็นสแกน (ตัวที่ 2) ให้เคลียร์ตัวแรกที่หลุดเข้า input ไปก่อนหน้า
+      if (barcodeBufferRef.current.length === 2 && isInInput) {
+        setSearchTerm("");
+      }
     } else {
-      // คนพิมพ์เองจริงๆ (buffer ว่าง และคีย์มาช้า)
+      // คีย์มาช้า หรือ buffer ว่าง → เริ่ม buffer ใหม่ด้วยตัวนี้ และไม่ block การพิมพ์
       barcodeBufferRef.current = e.key;
     }
 
