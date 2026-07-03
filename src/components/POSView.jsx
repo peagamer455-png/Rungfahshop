@@ -15,7 +15,10 @@ const FloatingActionButton = ({ onClick }) => (
     </button>
 );
 
-const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, navigateTo, sensitiveVisible, openPasswordModal, onToggleSensitive, setSidebarOpen }) => {
+// ✅ activePromos ถูกบันทึกเป็น string รูปแบบ "{ชื่อโปร} ({จำนวนชุด} ชุด)" เสมอ (ดูจาก AddBillView.jsx)
+const PROMO_ENTRY_REGEX = /^(.*)\((\d+)\s*ชุด\)\s*$/;
+
+const POSView = ({ products, bills, promotions, loadData, setPopupContent, setShowPopup, navigateTo, sensitiveVisible, openPasswordModal, onToggleSensitive, setSidebarOpen }) => {
     const todayDateString = useMemo(() => new Date().toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), []);
 
     const todayBills = useMemo(() => {
@@ -68,78 +71,135 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
         }, { totalsale: 0, totalcost: 0, cash: 0, transfer: 0 });
     }, [todayBills]);
 
+    // ✅ แยกยอดขายสินค้าเป็น "ราคาปกติ" กับ "โปรโมชั่น" โดยอิง activePromos + ตาราง promotions จริง
+    // (ไม่ใช้วิธีเทียบราคาต่อชิ้นแล้ว เพราะระบบนี้ item.price ไม่เคยเปลี่ยน ส่วนลดถูกหักเป็นก้อนที่ระดับบิลแทน)
     const productSalesSummary = useMemo(() => {
-    const grouped = {};
+        const promoDefs = promotions || [];
+        const normalMap = {};
+        const promoMap = {};
 
-    todayBills.forEach(bill => {
-        (bill.items || []).forEach(item => {
-            const price = Number(item.price) || 0;
-            const productKey = item.productId ?? item.name;
-            // ✅ กลุ่มด้วย productId + ราคา — ราคาต่างกัน = แยกแถว
-            const key = `${productKey}::${price.toFixed(2)}`;
-            const qty = Number(item.qty) || 0;
-
-            if (!grouped[key]) {
-                grouped[key] = {
-                    productKey,
-                    name: item.name,
-                    price,
-                    qty: 0,
-                    amount: 0,
-                };
+        const addTo = (map, productId, name, qty, amount, promoNamesSet) => {
+            if (qty <= 0) return;
+            if (!map[productId]) {
+                map[productId] = { productId, name, qty: 0, amount: 0, promoNames: new Set() };
             }
-            grouped[key].qty += qty;
-            grouped[key].amount += price * qty;
-        });
-    });
-
-    let list = Object.values(grouped);
-
-    // ✅ หาราคาสูงสุดของสินค้าแต่ละตัว ถือเป็น "ราคาปกติ"
-    const maxPriceByProduct = {};
-    list.forEach(g => {
-        if (!(g.productKey in maxPriceByProduct) || g.price > maxPriceByProduct[g.productKey]) {
-            maxPriceByProduct[g.productKey] = g.price;
-        }
-    });
-
-    // ✅ แปะ label กำกับว่าแถวไหนคือราคาโปรโมชั่น (มีมากกว่า 1 ราคาต่อสินค้า และราคานี้ต่ำกว่าราคาสูงสุด)
-    list = list.map(g => {
-        const sameProductRows = list.filter(x => x.productKey === g.productKey);
-        const isPromo = sameProductRows.length > 1 && g.price < maxPriceByProduct[g.productKey];
-        return {
-            ...g,
-            label: isPromo ? `${g.name} (โปรโมชั่น)` : g.name,
-            isPromo,
+            map[productId].qty += qty;
+            map[productId].amount += amount;
+            if (promoNamesSet) {
+                promoNamesSet.forEach(n => map[productId].promoNames.add(n));
+            }
         };
-    });
 
-    list.sort((a, b) => b.amount - a.amount);
+        todayBills.forEach(bill => {
+            const items = bill.items || [];
 
-    // ✅ แยกเป็น 2 กลุ่มไว้แสดงผลแยกกัน: ราคาปกติ / โปรโมชั่น
-    const normalList = list.filter(g => !g.isPromo).sort((a, b) => b.amount - a.amount);
-    const promoList = list.filter(g => g.isPromo).sort((a, b) => b.amount - a.amount);
+            // ขั้นที่ 1: หาว่าบิลนี้ใช้โปรอะไรบ้าง แล้วโปรนั้นๆ "กิน" สินค้าตัวไหนไปกี่ชิ้น/เป็นเงินเท่าไหร่
+            const promoQtyByProduct = {};
+            const promoRevenueByProduct = {};
+            const promoNamesByProduct = {};
 
-    const grandTotal = list.reduce((sum, g) => sum + g.amount, 0);
-    const grandQty = list.reduce((sum, g) => sum + g.qty, 0);
+            (bill.activePromos || []).forEach(entry => {
+                const match = String(entry).match(PROMO_ENTRY_REGEX);
+                if (!match) return;
 
-    const normalTotal = normalList.reduce((sum, g) => sum + g.amount, 0);
-    const normalQty = normalList.reduce((sum, g) => sum + g.qty, 0);
-    const promoTotal = promoList.reduce((sum, g) => sum + g.amount, 0);
-    const promoQty = promoList.reduce((sum, g) => sum + g.qty, 0);
+                const promoName = match[1].trim();
+                const sets = Number(match[2]) || 0;
+                if (sets <= 0) return;
 
-    return {
-        list,
-        normalList,
-        promoList,
-        grandTotal,
-        grandQty,
-        normalTotal,
-        normalQty,
-        promoTotal,
-        promoQty,
-    };
-}, [todayBills]);
+                const promo = promoDefs.find(p => p.name === promoName);
+                if (!promo) return; // โปรถูกลบ/แก้ชื่อไปแล้ว ไม่มีให้จับคู่ ก็ปล่อยผ่าน (นับเป็นราคาปกติ)
+
+                if (promo.type === 'qty') {
+                    const pItem = promo.items?.[0];
+                    if (!pItem) return;
+
+                    const billItem = items.find(i => i.productId === pItem.id);
+                    if (!billItem) return;
+
+                    const qtyConsumed = sets * (Number(promo.min_qty) || 0);
+                    const revenue = sets * (Number(promo.discount_price) || 0);
+
+                    promoQtyByProduct[pItem.id] = (promoQtyByProduct[pItem.id] || 0) + qtyConsumed;
+                    promoRevenueByProduct[pItem.id] = (promoRevenueByProduct[pItem.id] || 0) + revenue;
+                    if (!promoNamesByProduct[pItem.id]) promoNamesByProduct[pItem.id] = new Set();
+                    promoNamesByProduct[pItem.id].add(promo.name);
+
+                } else if (promo.type === 'bundle') {
+                    const parts = (promo.items || []).map(pItem => {
+                        const requiredQty = (pItem.qty && pItem.qty > 0) ? pItem.qty : 1;
+                        const billItem = items.find(i => i.productId === pItem.id);
+                        const unitPrice = billItem ? (Number(billItem.price) || 0) : 0;
+                        return { id: pItem.id, requiredQty, normalValue: unitPrice * requiredQty };
+                    });
+
+                    const totalNormalPerSet = parts.reduce((sum, p) => sum + p.normalValue, 0);
+                    if (totalNormalPerSet <= 0) return;
+
+                    const totalRevenue = sets * (Number(promo.discount_price) || 0);
+
+                    parts.forEach(p => {
+                        if (p.normalValue <= 0) return;
+                        const qtyConsumed = sets * p.requiredQty;
+                        const share = p.normalValue / totalNormalPerSet;
+                        const revenue = totalRevenue * share;
+
+                        promoQtyByProduct[p.id] = (promoQtyByProduct[p.id] || 0) + qtyConsumed;
+                        promoRevenueByProduct[p.id] = (promoRevenueByProduct[p.id] || 0) + revenue;
+                        if (!promoNamesByProduct[p.id]) promoNamesByProduct[p.id] = new Set();
+                        promoNamesByProduct[p.id].add(promo.name);
+                    });
+                }
+            });
+
+            // ขั้นที่ 2: ไล่ทีละ item ในบิล หัก qty ส่วนที่โปรกินไปออก เหลือเท่าไหร่คือ "ราคาปกติ"
+            items.forEach(item => {
+                const totalQty = Number(item.qty) || 0;
+                const price = Number(item.price) || 0;
+                const productId = item.productId;
+
+                const promoQtyRaw = promoQtyByProduct[productId] || 0;
+                const promoQty = Math.min(promoQtyRaw, totalQty);
+                const normalQty = totalQty - promoQty;
+
+                if (normalQty > 0) {
+                    addTo(normalMap, productId, item.name, normalQty, normalQty * price, null);
+                }
+
+                if (promoQty > 0) {
+                    // เผื่อกรณีข้อมูลไม่ครบ (promoQtyRaw > totalQty) ให้ลดสัดส่วนรายได้ตามจริง
+                    const revenueRatio = promoQtyRaw > 0 ? (promoQty / promoQtyRaw) : 0;
+                    const promoAmount = (promoRevenueByProduct[productId] || 0) * revenueRatio;
+                    addTo(promoMap, productId, item.name, promoQty, promoAmount, promoNamesByProduct[productId]);
+                }
+            });
+        });
+
+        const toList = (map) => Object.values(map)
+            .map(g => ({ ...g, promoNames: Array.from(g.promoNames || []) }))
+            .sort((a, b) => b.amount - a.amount);
+
+        const normalList = toList(normalMap);
+        const promoItemList = toList(promoMap);
+
+        const sumQty = (list) => list.reduce((s, g) => s + g.qty, 0);
+        const sumAmount = (list) => list.reduce((s, g) => s + g.amount, 0);
+
+        const normalTotal = sumAmount(normalList);
+        const normalQty = sumQty(normalList);
+        const promoTotal = sumAmount(promoItemList);
+        const promoQty = sumQty(promoItemList);
+
+        return {
+            normalList,
+            promoList: promoItemList,
+            normalTotal,
+            normalQty,
+            promoTotal,
+            promoQty,
+            grandTotal: normalTotal + promoTotal,
+            grandQty: normalQty + promoQty,
+        };
+    }, [todayBills, promotions]);
 
     // ฟังก์ชันจัดการการคลิกเปิด/ปิดข้อมูล Sensitive
     const handleToggleSensitive = () => {
@@ -147,82 +207,87 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
     };
 
     const openProductSummary = () => {
-    const {
-        normalList,
-        promoList,
-        grandTotal,
-        grandQty,
-        normalTotal,
-        promoTotal,
-    } = productSalesSummary;
+        const {
+            normalList,
+            promoList,
+            grandTotal,
+            grandQty,
+            normalTotal,
+            promoTotal,
+        } = productSalesSummary;
 
-    const renderTable = (items, subtotal) => (
-        <table className="w-full text-base mb-2">
-            <thead>
-                <tr className="text-left text-gray-500 border-b">
-                    <th className="py-3 pr-2">สินค้า</th>
-                    <th className="py-3 px-2 text-right">จำนวน</th>
-                    <th className="py-3 px-2 text-right">ราคา/ชิ้น</th>
-                    <th className="py-3 pl-2 text-right">รวม</th>
-                </tr>
-            </thead>
-            <tbody>
-                {items.map((item, idx) => (
-                    <tr key={idx} className="border-b last:border-b-0 hover:bg-gray-50">
-                        <td className="py-3 pr-2 font-medium text-gray-800">{item.name}</td>
-                        <td className="py-3 px-2 text-right text-gray-600">{item.qty}</td>
-                        <td className="py-3 px-2 text-right text-gray-600">{formatCurrency(item.price)}</td>
-                        <td className="py-3 pl-2 text-right font-semibold text-green-700">{formatCurrency(item.amount)}</td>
+        const renderTable = (items, subtotal, showPromoBadge) => (
+            <table className="w-full text-base mb-2">
+                <thead>
+                    <tr className="text-left text-gray-500 border-b">
+                        <th className="py-3 pr-2">สินค้า</th>
+                        <th className="py-3 px-2 text-right">จำนวน</th>
+                        <th className="py-3 pl-2 text-right">รวม</th>
                     </tr>
-                ))}
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colSpan={3} className="pt-2 text-right text-gray-500 text-sm">รวม</td>
-                    <td className="pt-2 text-right font-bold text-green-700">{formatCurrency(subtotal)}</td>
-                </tr>
-            </tfoot>
-        </table>
-    );
+                </thead>
+                <tbody>
+                    {items.map((item, idx) => (
+                        <tr key={idx} className="border-b last:border-b-0 hover:bg-gray-50">
+                            <td className="py-3 pr-2 font-medium text-gray-800">
+                                {item.name}
+                                {showPromoBadge && item.promoNames && item.promoNames.length > 0 && (
+                                    <span className="ml-2 inline-block px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full">
+                                        {item.promoNames.join(', ')}
+                                    </span>
+                                )}
+                            </td>
+                            <td className="py-3 px-2 text-right text-gray-600">{item.qty}</td>
+                            <td className="py-3 pl-2 text-right font-semibold text-green-700">{formatCurrency(item.amount)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colSpan={2} className="pt-2 text-right text-gray-500 text-sm">รวม</td>
+                        <td className="pt-2 text-right font-bold text-green-700">{formatCurrency(subtotal)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        );
 
-    setPopupContent({
-        title: "📦 สรุปสินค้าที่ขายวันนี้",
-        color: "green",
-        size: "xl",
-        message: (
-            <div className="max-h-[65vh] overflow-y-auto -mx-1 px-1">
-                {normalList.length === 0 && promoList.length === 0 ? (
-                    <p className="text-center text-gray-500 py-8">วันนี้ยังไม่มีรายการขาย</p>
-                ) : (
-                    <>
-                        {normalList.length > 0 && (
-                            <div className="mb-6">
-                                <h3 className="font-semibold text-gray-700 mb-2">🏷️ ราคาปกติ</h3>
-                                {renderTable(normalList, normalTotal)}
+        setPopupContent({
+            title: "📦 สรุปสินค้าที่ขายวันนี้",
+            color: "green",
+            size: "xl",
+            message: (
+                <div className="max-h-[65vh] overflow-y-auto -mx-1 px-1">
+                    {normalList.length === 0 && promoList.length === 0 ? (
+                        <p className="text-center text-gray-500 py-8">วันนี้ยังไม่มีรายการขาย</p>
+                    ) : (
+                        <>
+                            {normalList.length > 0 && (
+                                <div className="mb-6">
+                                    <h3 className="font-semibold text-gray-700 mb-2">🏷️ ราคาปกติ</h3>
+                                    {renderTable(normalList, normalTotal, false)}
+                                </div>
+                            )}
+
+                            {promoList.length > 0 && (
+                                <div className="mb-6">
+                                    <h3 className="font-semibold text-amber-700 mb-2">🔖 โปรโมชั่น</h3>
+                                    {renderTable(promoList, promoTotal, true)}
+                                </div>
+                            )}
+
+                            <div className="flex justify-between items-center mt-5 pt-4 border-t-2 border-gray-200">
+                                <span className="text-gray-600">
+                                    รวม {normalList.length + promoList.length} รายการ / {grandQty} ชิ้น
+                                </span>
+                                <span className="text-xl font-bold text-green-700">{formatCurrency(grandTotal)}</span>
                             </div>
-                        )}
-
-                        {promoList.length > 0 && (
-                            <div className="mb-6">
-                                <h3 className="font-semibold text-amber-700 mb-2">🔖 โปรโมชั่น</h3>
-                                {renderTable(promoList, promoTotal)}
-                            </div>
-                        )}
-
-                        <div className="flex justify-between items-center mt-5 pt-4 border-t-2 border-gray-200">
-                            <span className="text-gray-600">
-                                รวม {normalList.length + promoList.length} รายการ / {grandQty} ชิ้น
-                            </span>
-                            <span className="text-xl font-bold text-green-700">{formatCurrency(grandTotal)}</span>
-                        </div>
-                    </>
-                )}
-            </div>
-        ),
-        actions: [{ label: "ปิด", handler: () => setShowPopup(false) }]
-    });
-    setShowPopup(true);
-};
+                        </>
+                    )}
+                </div>
+            ),
+            actions: [{ label: "ปิด", handler: () => setShowPopup(false) }]
+        });
+        setShowPopup(true);
+    };
 
 
     return (
