@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { Header } from './SharedUI'; // Import จาก SharedUI
 import { formatCurrency } from '../utils';
 import SummaryCard from './SummaryCard';
@@ -68,9 +68,81 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
         }, { totalsale: 0, totalcost: 0, cash: 0, transfer: 0 });
     }, [todayBills]);
 
+    const productSalesSummary = useMemo(() => {
+    const grouped = {};
+
+    todayBills.forEach(bill => {
+        (bill.items || []).forEach(item => {
+            const key = item.productId ?? item.name;
+            const qty = Number(item.qty) || 0;
+            const price = Number(item.price) || 0;
+
+            if (!grouped[key]) {
+                grouped[key] = { name: item.name, qty: 0, amount: 0 };
+            }
+            grouped[key].qty += qty;
+            grouped[key].amount += price * qty;
+        });
+    });
+
+    const list = Object.values(grouped)
+        .map(g => ({ ...g, avgPrice: g.qty > 0 ? g.amount / g.qty : 0 }))
+        .sort((a, b) => b.amount - a.amount);
+
+    const grandTotal = list.reduce((sum, g) => sum + g.amount, 0);
+    const grandQty = list.reduce((sum, g) => sum + g.qty, 0);
+
+    return { list, grandTotal, grandQty };
+}, [todayBills]);
+
     // ฟังก์ชันจัดการการคลิกเปิด/ปิดข้อมูล Sensitive
     const handleToggleSensitive = () => {
         onToggleSensitive();
+    };
+    
+    const openProductSummary = () => {
+        const { list, grandTotal, grandQty } = productSalesSummary;
+
+        setPopupContent({
+            title: "📦 สรุปสินค้าที่ขายวันนี้",
+            color: "green",
+            message: (
+                <div className="max-h-[55vh] overflow-y-auto -mx-1 px-1">
+                    {list.length === 0 ? (
+                        <p className="text-center text-gray-500 py-4">วันนี้ยังไม่มีรายการขาย</p>
+                    ) : (
+                        <>
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-gray-500 border-b">
+                                        <th className="py-2 pr-1">สินค้า</th>
+                                        <th className="py-2 px-1 text-right">จำนวน</th>
+                                        <th className="py-2 px-1 text-right">ราคา/ชิ้น</th>
+                                        <th className="py-2 pl-1 text-right">รวม</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {list.map((item, idx) => (
+                                        <tr key={idx} className="border-b last:border-b-0">
+                                            <td className="py-2 pr-1 font-medium text-gray-800">{item.name}</td>
+                                            <td className="py-2 px-1 text-right text-gray-600">{item.qty}</td>
+                                            <td className="py-2 px-1 text-right text-gray-600">{formatCurrency(item.avgPrice)}</td>
+                                            <td className="py-2 pl-1 text-right font-semibold text-green-700">{formatCurrency(item.amount)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <div className="flex justify-between items-center mt-4 pt-3 border-t text-sm">
+                                <span className="text-gray-600">รวม {list.length} รายการ / {grandQty} ชิ้น</span>
+                                <span className="text-base font-bold text-green-700">{formatCurrency(grandTotal)}</span>
+                            </div>
+                        </>
+                    )}
+                </div>
+            ),
+            actions: [{ label: "ปิด", handler: () => setShowPopup(false) }]
+        });
+        setShowPopup(true);
     };
 
 
