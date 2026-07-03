@@ -449,6 +449,7 @@ useEffect(() => {
               if (e.key === "Enter" && searchTerm.trim().length > 0) {
                   e.preventDefault();
                   handleBarcodeScanRef.current(searchTerm.trim());
+                  setSearchTerm("");
                 }
               }}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500"
