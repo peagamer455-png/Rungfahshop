@@ -101,49 +101,50 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
     };
     
     const openProductSummary = () => {
-        const { list, grandTotal, grandQty } = productSalesSummary;
+    const { list, grandTotal, grandQty } = productSalesSummary;
 
-        setPopupContent({
-            title: "📦 สรุปสินค้าที่ขายวันนี้",
-            color: "green",
-            message: (
-                <div className="max-h-[55vh] overflow-y-auto -mx-1 px-1">
-                    {list.length === 0 ? (
-                        <p className="text-center text-gray-500 py-4">วันนี้ยังไม่มีรายการขาย</p>
-                    ) : (
-                        <>
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="text-left text-gray-500 border-b">
-                                        <th className="py-2 pr-1">สินค้า</th>
-                                        <th className="py-2 px-1 text-right">จำนวน</th>
-                                        <th className="py-2 px-1 text-right">ราคา/ชิ้น</th>
-                                        <th className="py-2 pl-1 text-right">รวม</th>
+    setPopupContent({
+        title: "📦 สรุปสินค้าที่ขายวันนี้",
+        color: "green",
+        size: "lg", // ✅ เพิ่มบรรทัดนี้ — ทำให้ popup กว้างขึ้น
+        message: (
+            <div className="max-h-[65vh] overflow-y-auto -mx-1 px-1">
+                {list.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">วันนี้ยังไม่มีรายการขาย</p>
+                ) : (
+                    <>
+                        <table className="w-full text-base">
+                            <thead>
+                                <tr className="text-left text-gray-500 border-b">
+                                    <th className="py-3 pr-2">สินค้า</th>
+                                    <th className="py-3 px-2 text-right">จำนวน</th>
+                                    <th className="py-3 px-2 text-right">ราคา/ชิ้น</th>
+                                    <th className="py-3 pl-2 text-right">รวม</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {list.map((item, idx) => (
+                                    <tr key={idx} className="border-b last:border-b-0 hover:bg-gray-50">
+                                        <td className="py-3 pr-2 font-medium text-gray-800">{item.name}</td>
+                                        <td className="py-3 px-2 text-right text-gray-600">{item.qty}</td>
+                                        <td className="py-3 px-2 text-right text-gray-600">{formatCurrency(item.avgPrice)}</td>
+                                        <td className="py-3 pl-2 text-right font-semibold text-green-700">{formatCurrency(item.amount)}</td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {list.map((item, idx) => (
-                                        <tr key={idx} className="border-b last:border-b-0">
-                                            <td className="py-2 pr-1 font-medium text-gray-800">{item.name}</td>
-                                            <td className="py-2 px-1 text-right text-gray-600">{item.qty}</td>
-                                            <td className="py-2 px-1 text-right text-gray-600">{formatCurrency(item.avgPrice)}</td>
-                                            <td className="py-2 pl-1 text-right font-semibold text-green-700">{formatCurrency(item.amount)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            <div className="flex justify-between items-center mt-4 pt-3 border-t text-sm">
-                                <span className="text-gray-600">รวม {list.length} รายการ / {grandQty} ชิ้น</span>
-                                <span className="text-base font-bold text-green-700">{formatCurrency(grandTotal)}</span>
-                            </div>
-                        </>
-                    )}
-                </div>
-            ),
-            actions: [{ label: "ปิด", handler: () => setShowPopup(false) }]
-        });
-        setShowPopup(true);
-    };
+                                ))}
+                            </tbody>
+                        </table>
+                        <div className="flex justify-between items-center mt-5 pt-4 border-t-2 border-gray-200">
+                            <span className="text-gray-600">รวม {list.length} รายการ / {grandQty} ชิ้น</span>
+                            <span className="text-xl font-bold text-green-700">{formatCurrency(grandTotal)}</span>
+                        </div>
+                    </>
+                )}
+            </div>
+        ),
+        actions: [{ label: "ปิด", handler: () => setShowPopup(false) }]
+    });
+    setShowPopup(true);
+};
 
 
     return (
