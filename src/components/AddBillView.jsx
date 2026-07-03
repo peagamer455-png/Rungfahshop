@@ -343,31 +343,37 @@ const AddBillView = ({
       });
   }, [searchTerm, products, billItems]);
 
-  const handleBarcodeScan = useCallback((barcode) => {
-  const translatedBarcode = translateBarcode(barcode);
+  const handleBarcodeScan = useCallback((code) => {
+  const raw = String(code).trim();
+  const translated = String(translateBarcode(code)).trim();
 
-  const foundProduct = products.find((p) => {
-    if (p.barcode) {
-      return (
-        String(p.barcode) === String(barcode) ||
-        String(p.barcode) === String(translatedBarcode)
-      );
-    }
-    return String(p.id) === String(translatedBarcode);
+  // ✅ รอบ 1: เช็ค barcode ของสินค้า "ทุกตัว" ก่อน
+  let foundProduct = products.find((p) => {
+    if (!p.barcode) return false;
+    const pBarcode = String(p.barcode).trim();
+    return pBarcode === raw || pBarcode === translated;
   });
+
+  // ✅ รอบ 2: ถ้าไม่เจอจาก barcode เลย ค่อยเช็คด้วย ID
+  if (!foundProduct) {
+    foundProduct = products.find((p) => {
+      const pId = String(p.id).trim();
+      return pId === translated || pId === raw;
+    });
+  }
 
   if (foundProduct) {
     addItemToBill(foundProduct);
   } else {
     setPopupContent({
       title: "🔍 ไม่พบสินค้า",
-      message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${barcode}`,
+      message: `ไม่พบสินค้าที่มีบาร์โค้ด/รหัส: ${code}`,
       color: "yellow"
     });
     setShowPopup(true);
   }
 }, [products, addItemToBill, setPopupContent, setShowPopup]);
-  
+
 const handleBarcodeScanRef = useRef(handleBarcodeScan);
 useEffect(() => {
   handleBarcodeScanRef.current = handleBarcodeScan;
@@ -379,39 +385,29 @@ useEffect(() => {
   const handleScanner = (e) => {
     const isInInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
 
+    // ✅ ถ้ากำลังอยู่ใน input ปล่อยให้ input จัดการเองทั้งหมด ไม่ต้องยุ่งเลย
+    if (isInInput) return;
+
+    const currentTime = Date.now();
+    const timeDiff = currentTime - lastKeyTimeRef.current;
+
     if (e.key === "Enter") {
       if (barcodeBufferRef.current.length >= 1) {
         e.preventDefault();
-        // ✅ เรียกผ่าน ref เสมอ จะได้ฟังก์ชันเวอร์ชันล่าสุดที่เห็น products ปัจจุบัน
         handleBarcodeScanRef.current(barcodeBufferRef.current);
-        setSearchTerm("");
+        barcodeBufferRef.current = "";
       }
-      barcodeBufferRef.current = "";
       lastKeyTimeRef.current = 0;
       return;
     }
 
-    // ปล่อยปุ่มพิเศษผ่านไปเลย (Backspace, Shift, Tab, ลูกศร ฯลฯ)
-    if (e.key.length !== 1) {
-      return;
-    }
+    if (e.key.length !== 1) return; // ข้ามปุ่มพิเศษ
 
-    const currentTime = Date.now();
-    const timeDiff = currentTime - lastKeyTimeRef.current;
-    const isContinuingFastSequence =
-      timeDiff < SCAN_THRESHOLD_MS && barcodeBufferRef.current.length > 0;
-
-    if (isContinuingFastSequence) {
-      if (isInInput) e.preventDefault();
+    if (timeDiff < SCAN_THRESHOLD_MS) {
       barcodeBufferRef.current += e.key;
-
-      if (barcodeBufferRef.current.length === 2 && isInInput) {
-        setSearchTerm("");
-      }
     } else {
       barcodeBufferRef.current = e.key;
     }
-
     lastKeyTimeRef.current = currentTime;
   };
 
@@ -449,6 +445,12 @@ useEffect(() => {
               placeholder="พิมพ์ชื่อสินค้า..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+              if (e.key === "Enter" && searchTerm.trim().length > 0) {
+                  e.preventDefault();
+                  handleBarcodeScanRef.current(searchTerm.trim());
+                }
+              }}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-green-500 focus:border-green-500"
             />
 
