@@ -367,6 +367,11 @@ const AddBillView = ({
     setShowPopup(true);
   }
 }, [products, addItemToBill, setPopupContent, setShowPopup]);
+  
+const handleBarcodeScanRef = useRef(handleBarcodeScan);
+useEffect(() => {
+  handleBarcodeScanRef.current = handleBarcodeScan;
+}, [handleBarcodeScan]);
 
 useEffect(() => {
   const SCAN_THRESHOLD_MS = 50;
@@ -374,28 +379,25 @@ useEffect(() => {
   const handleScanner = (e) => {
     const isInInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
 
-    // Enter = จบการสแกน (หรือกด Enter เฉยๆ ตอนพิมพ์ปกติ)
     if (e.key === "Enter") {
-      if (barcodeBufferRef.current.length >= 3) {
+      if (barcodeBufferRef.current.length >= 1) {
         e.preventDefault();
-        handleBarcodeScan(barcodeBufferRef.current);
-        setSearchTerm(""); // เคลียร์ตัวอักษรที่อาจหลุดเข้าไปก่อนหน้า
+        // ✅ เรียกผ่าน ref เสมอ จะได้ฟังก์ชันเวอร์ชันล่าสุดที่เห็น products ปัจจุบัน
+        handleBarcodeScanRef.current(barcodeBufferRef.current);
+        setSearchTerm("");
       }
       barcodeBufferRef.current = "";
       lastKeyTimeRef.current = 0;
       return;
     }
 
-    // ✅ ปล่อยปุ่มพิเศษผ่านไปเลย ไม่ยุ่งกับ buffer/timing
-    // Backspace, Delete, Shift, Tab, ลูกศร ฯลฯ จะมี e.key.length !== 1
+    // ปล่อยปุ่มพิเศษผ่านไปเลย (Backspace, Shift, Tab, ลูกศร ฯลฯ)
     if (e.key.length !== 1) {
       return;
     }
 
     const currentTime = Date.now();
     const timeDiff = currentTime - lastKeyTimeRef.current;
-
-    // ถือว่าเป็นการสแกนต่อเนื่อง ก็ต่อเมื่อ buffer มีของ "และ" คีย์มาเร็วจริงๆ
     const isContinuingFastSequence =
       timeDiff < SCAN_THRESHOLD_MS && barcodeBufferRef.current.length > 0;
 
@@ -403,12 +405,10 @@ useEffect(() => {
       if (isInInput) e.preventDefault();
       barcodeBufferRef.current += e.key;
 
-      // ถ้าเพิ่งยืนยันว่าเป็นสแกน (ตัวที่ 2) ให้เคลียร์ตัวแรกที่หลุดเข้า input ไปก่อนหน้า
       if (barcodeBufferRef.current.length === 2 && isInInput) {
         setSearchTerm("");
       }
     } else {
-      // คีย์มาช้า หรือ buffer ว่าง → เริ่ม buffer ใหม่ด้วยตัวนี้ และไม่ block การพิมพ์
       barcodeBufferRef.current = e.key;
     }
 
@@ -417,7 +417,7 @@ useEffect(() => {
 
   window.addEventListener("keydown", handleScanner);
   return () => window.removeEventListener("keydown", handleScanner);
-}, [handleBarcodeScan]);
+}, []);
   
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
