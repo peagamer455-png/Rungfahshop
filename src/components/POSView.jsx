@@ -73,21 +73,48 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
 
     todayBills.forEach(bill => {
         (bill.items || []).forEach(item => {
-            const key = item.productId ?? item.name;
-            const qty = Number(item.qty) || 0;
             const price = Number(item.price) || 0;
+            const productKey = item.productId ?? item.name;
+            // ✅ กลุ่มด้วย productId + ราคา — ราคาต่างกัน = แยกแถว
+            const key = `${productKey}::${price.toFixed(2)}`;
+            const qty = Number(item.qty) || 0;
 
             if (!grouped[key]) {
-                grouped[key] = { name: item.name, qty: 0, amount: 0 };
+                grouped[key] = {
+                    productKey,
+                    name: item.name,
+                    price,
+                    qty: 0,
+                    amount: 0,
+                };
             }
             grouped[key].qty += qty;
             grouped[key].amount += price * qty;
         });
     });
 
-    const list = Object.values(grouped)
-        .map(g => ({ ...g, avgPrice: g.qty > 0 ? g.amount / g.qty : 0 }))
-        .sort((a, b) => b.amount - a.amount);
+    let list = Object.values(grouped);
+
+    // ✅ หาราคาสูงสุดของสินค้าแต่ละตัว ถือเป็น "ราคาปกติ"
+    const maxPriceByProduct = {};
+    list.forEach(g => {
+        if (!(g.productKey in maxPriceByProduct) || g.price > maxPriceByProduct[g.productKey]) {
+            maxPriceByProduct[g.productKey] = g.price;
+        }
+    });
+
+    // ✅ แปะ label กำกับว่าแถวไหนคือราคาโปรโมชั่น (มีมากกว่า 1 ราคาต่อสินค้า และราคานี้ต่ำกว่าราคาสูงสุด)
+    list = list.map(g => {
+        const sameProductRows = list.filter(x => x.productKey === g.productKey);
+        const isPromo = sameProductRows.length > 1 && g.price < maxPriceByProduct[g.productKey];
+        return {
+            ...g,
+            label: isPromo ? `${g.name} (โปรโมชั่น)` : g.name,
+            isPromo,
+        };
+    });
+
+    list.sort((a, b) => b.amount - a.amount);
 
     const grandTotal = list.reduce((sum, g) => sum + g.amount, 0);
     const grandQty = list.reduce((sum, g) => sum + g.qty, 0);
@@ -106,7 +133,7 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
     setPopupContent({
         title: "📦 สรุปสินค้าที่ขายวันนี้",
         color: "green",
-        size: "xxl",
+        size: "lg",
         message: (
             <div className="max-h-[65vh] overflow-y-auto -mx-1 px-1">
                 {list.length === 0 ? (
@@ -125,9 +152,16 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
                             <tbody>
                                 {list.map((item, idx) => (
                                     <tr key={idx} className="border-b last:border-b-0 hover:bg-gray-50">
-                                        <td className="py-3 pr-2 font-medium text-gray-800">{item.name}</td>
+                                        <td className="py-3 pr-2 font-medium text-gray-800">
+                                            {item.name}
+                                            {item.isPromo && (
+                                                <span className="ml-2 inline-block px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full">
+                                                    โปรโมชั่น
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="py-3 px-2 text-right text-gray-600">{item.qty}</td>
-                                        <td className="py-3 px-2 text-right text-gray-600">{formatCurrency(item.avgPrice)}</td>
+                                        <td className="py-3 px-2 text-right text-gray-600">{formatCurrency(item.price)}</td>
                                         <td className="py-3 pl-2 text-right font-semibold text-green-700">{formatCurrency(item.amount)}</td>
                                     </tr>
                                 ))}
