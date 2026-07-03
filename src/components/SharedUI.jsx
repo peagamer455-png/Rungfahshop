@@ -8,14 +8,14 @@ export const LoadingSpinner = () => (
   </div>
 );
 
-// 2. Header (เพิ่ม props 'date' เข้ามา)
+// 2. Header (เพิ่ม props 'date' และ 'onOpenProductSummary' เข้ามา)
 export const Header = ({
   title = "ระบบจัดการหน้าร้านรุ่งฟ้าแอร์",
   onToggleSidebar,
   onToggleSensitive,
   sensitiveVisible,
-  date, // รับค่าวันที่เข้ามา
-  onOpenProductSummary // ✅ เพิ่ม prop ใหม่ (optional — หน้าไหนไม่ส่งมาก็ไม่โชว์ปุ่ม)
+  date,
+  onOpenProductSummary // ✅ เพิ่ม
 }) => (
   <header className="flex items-center justify-between p-4 bg-white shadow-sm sticky top-0 z-10 border-b border-gray-100">
     <div className="flex items-center">
@@ -31,7 +31,6 @@ export const Header = ({
     </div>
 
     <div className="flex items-center gap-3">
-      {/* ส่วนแสดงวันที่ */}
       {date && (
         <div className="hidden md:flex items-center gap-2 px-4 py-1.5 bg-white border border-green-200 rounded-lg shadow-[0_2px_10px_-3px_rgba(0,0,0,0.1)]">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -43,7 +42,7 @@ export const Header = ({
         </div>
       )}
 
-      {/* ✅ ปุ่มสรุปสินค้าขายวันนี้ — โชว์เฉพาะหน้าที่ส่ง prop นี้มา */}
+      {/* ✅ ปุ่มสรุปสินค้าขายวันนี้ */}
       {onOpenProductSummary && (
         <button
           onClick={onOpenProductSummary}
@@ -84,7 +83,6 @@ export const Header = ({
   </header>
 );
 
-
 // 3. Modal Popup
 export const ModalPopup = ({ isOpen, title, message, onClose, actions }) => {
   if (!isOpen) return null;
@@ -93,7 +91,8 @@ export const ModalPopup = ({ isOpen, title, message, onClose, actions }) => {
     <div className="fixed inset-0 bg-black bg-opacity-40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6">
         <h3 className="text-lg font-bold text-gray-800 mb-2">{title}</h3>
-        <p className="text-gray-600 mb-6 text-sm">{message}</p>
+        {/* ✅ เปลี่ยนจาก <p> เป็น <div> เพื่อรองรับ message ที่เป็น JSX (table) */}
+        <div className="text-gray-600 mb-6 text-sm">{message}</div>
         <div className="flex justify-end space-x-2">
           {actions ? actions.map((action, index) => (
             <button
