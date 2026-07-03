@@ -309,63 +309,77 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
             });
     }, [searchTerm, products, billItems]);
 
-    const handleBarcodeScan = useCallback((barcode) => {
-  const translatedBarcode = translateBarcode(barcode);
+    const handleBarcodeScan = useCallback((code) => {
+  const raw = String(code).trim();
+  const translated = String(translateBarcode(code)).trim();
 
-  const foundProduct = products.find((p) => {
-    if (p.barcode) {
-      return (
-        String(p.barcode) === String(barcode) ||
-        String(p.barcode) === String(translatedBarcode)
-      );
-    }
-    return String(p.id) === String(translatedBarcode);
+  // ✅ รอบ 1: เช็ค barcode ของสินค้าทุกตัวก่อน
+  let foundProduct = products.find((p) => {
+    if (!p.barcode) return false;
+    const pBarcode = String(p.barcode).trim();
+    return pBarcode === raw || pBarcode === translated;
   });
+
+  // ✅ รอบ 2: ถ้าไม่เจอจาก barcode เลย ค่อยเช็คด้วย ID
+  if (!foundProduct) {
+    foundProduct = products.find((p) => {
+      const pId = String(p.id).trim();
+      return pId === translated || pId === raw;
+    });
+  }
 
   if (foundProduct) {
     addItemToBill(foundProduct);
   } else {
     setPopupContent({
       title: "🔍 ไม่พบสินค้า",
-      message: `ไม่พบสินค้าที่มีบาร์โค้ด: ${barcode}`,
+      message: `ไม่พบสินค้าที่มีบาร์โค้ด/รหัส: ${code}`,
       color: "yellow"
     });
     setShowPopup(true);
   }
 }, [products, addItemToBill, setPopupContent, setShowPopup]);
 
+const handleBarcodeScanRef = useRef(handleBarcodeScan);
+useEffect(() => {
+  handleBarcodeScanRef.current = handleBarcodeScan;
+}, [handleBarcodeScan]);
+
     useEffect(() => {
+  const SCAN_THRESHOLD_MS = 50;
+
   const handleScanner = (e) => {
+    const isInInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+
+    // ✅ ถ้าอยู่ใน input ปล่อยให้ input จัดการเอง
+    if (isInInput) return;
+
     const currentTime = Date.now();
     const timeDiff = currentTime - lastKeyTimeRef.current;
-    const isInInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
 
     if (e.key === "Enter") {
       if (barcodeBufferRef.current.length >= 1) {
         e.preventDefault();
-        handleBarcodeScan(barcodeBufferRef.current);
+        handleBarcodeScanRef.current(barcodeBufferRef.current);
         barcodeBufferRef.current = "";
-        setSearchTerm("");
       }
       lastKeyTimeRef.current = 0;
       return;
     }
 
-    // ตัวอักษรมาเร็ว = scanner → เก็บ buffer และกัน input รับค่า
-    if (timeDiff < 50) {
-      if (isInInput) e.preventDefault(); // ✅ กัน input รับค่า barcode
+    if (e.key.length !== 1) return;
+
+    if (timeDiff < SCAN_THRESHOLD_MS) {
       barcodeBufferRef.current += e.key;
     } else {
-      // มาช้า = คนพิมพ์เอง → reset buffer ปล่อย input ทำงานปกติ
-      barcodeBufferRef.current = e.key; // เริ่ม buffer ใหม่ด้วยตัวนี้
+      barcodeBufferRef.current = e.key;
     }
-
     lastKeyTimeRef.current = currentTime;
   };
 
-  window.addEventListener("keydown", handleScanner); // ✅ เปลี่ยนเป็น keydown
+  window.addEventListener("keydown", handleScanner);
   return () => window.removeEventListener("keydown", handleScanner);
-}, [handleBarcodeScan]);
+}, []);
 
     return (
         <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
@@ -393,11 +407,18 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
 
                         <h3 className="text-lg font-bold text-yellow-700 pt-4">🔍 ค้นหาสินค้าเพื่อแก้ไขในบิล</h3>
                         <input
-                            type="text"
-                            placeholder="พิมพ์ชื่อสินค้า..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500"
+                          type="text"
+                          placeholder="พิมพ์ชื่อสินค้า..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && searchTerm.trim().length > 0) {
+                              e.preventDefault();
+                              handleBarcodeScanRef.current(searchTerm.trim());
+                              setSearchTerm("");
+                            }
+                          }}
+                          className="w-full p-3 border border-gray-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500"
                         />
 
                         {/* Search Results */}
