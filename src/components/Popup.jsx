@@ -1,9 +1,15 @@
 import React from "react";
-
 const Popup = ({ content, setShowPopup }) => {
   if (!content) return null;
+  const { title, message, actions, isLoading, color = "green", content: inputElement, size } = content;
 
-  const { title, message, actions, isLoading, color = "green", content: inputElement } = content;
+  // ✅ ขนาดกล่อง ปรับได้ผ่าน content.size (ไม่ระบุ = เท่าเดิม)
+  const sizeClass = {
+    sm: "max-w-sm",
+    md: "max-w-lg",
+    lg: "max-w-2xl",
+    xl: "max-w-4xl",
+  }[size] || "max-w-sm";
 
   const scanKeyframes = `
     @keyframes scan-animation {
@@ -11,7 +17,6 @@ const Popup = ({ content, setShowPopup }) => {
       100% { left: 100%; }
     }
   `;
-
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4"
@@ -24,19 +29,15 @@ const Popup = ({ content, setShowPopup }) => {
           100% { transform: translateX(100%); }
         }
       `}</style>
-
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-fade-in-up"
+        className={`bg-white rounded-2xl shadow-2xl w-full ${sizeClass} p-6 animate-fade-in-up`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* หัวข้อ */}
         <h3 className="text-xl font-bold text-gray-800 mb-2">{title}</h3>
-
-        {/* ข้อความ */}
-        <p className="text-gray-600 mb-6">{message}</p>
-
+        {/* ข้อความ — เปลี่ยนจาก <p> เป็น <div> เพื่อรองรับ JSX ซับซ้อน เช่น ตาราง */}
+        <div className="text-gray-600 mb-6">{message}</div>
         {inputElement && <div className="mb-6">{inputElement}</div>}
-
         {/* ปุ่มกด */}
         <div className="flex justify-end gap-3 min-h-[40px] items-center w-full">
           {isLoading ? (
@@ -84,5 +85,4 @@ const Popup = ({ content, setShowPopup }) => {
     </div>
   );
 };
-
 export default Popup;
