@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Header } from './SharedUI'; // Import จาก SharedUI
 import { formatCurrency } from '../utils';
 import SummaryCard from './SummaryCard';
