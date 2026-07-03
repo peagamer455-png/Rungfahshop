@@ -222,28 +222,33 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
                     <tr className="text-left text-gray-500 border-b">
                         <th className="py-3 pr-2">สินค้า</th>
                         <th className="py-3 px-2 text-right">จำนวน</th>
+                        <th className="py-3 px-2 text-right">ราคา/หน่วย</th>
                         <th className="py-3 pl-2 text-right">รวม</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {items.map((item, idx) => (
-                        <tr key={idx} className="border-b last:border-b-0 hover:bg-gray-50">
-                            <td className="py-3 pr-2 font-medium text-gray-800">
-                                {item.name}
-                                {showPromoBadge && item.promoNames && item.promoNames.length > 0 && (
-                                    <span className="ml-2 inline-block px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full">
-                                        {item.promoNames.join(', ')}
-                                    </span>
-                                )}
-                            </td>
-                            <td className="py-3 px-2 text-right text-gray-600">{item.qty}</td>
-                            <td className="py-3 pl-2 text-right font-semibold text-green-700">{formatCurrency(item.amount)}</td>
-                        </tr>
-                    ))}
+                    {items.map((item, idx) => {
+                        const unitPrice = item.qty > 0 ? item.amount / item.qty : 0;
+                        return (
+                            <tr key={idx} className="border-b last:border-b-0 hover:bg-gray-50">
+                                <td className="py-3 pr-2 font-medium text-gray-800">
+                                    {item.name}
+                                    {showPromoBadge && item.promoNames && item.promoNames.length > 0 && (
+                                        <span className="ml-2 inline-block px-2 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full">
+                                            {item.promoNames.join(', ')}
+                                        </span>
+                                    )}
+                                </td>
+                                <td className="py-3 px-2 text-right text-gray-600">{item.qty}</td>
+                                <td className="py-3 px-2 text-right text-gray-600">{formatCurrency(unitPrice)}</td>
+                                <td className="py-3 pl-2 text-right font-semibold text-green-700">{formatCurrency(item.amount)}</td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colSpan={2} className="pt-2 text-right text-gray-500 text-sm">รวม</td>
+                        <td colSpan={3} className="pt-2 text-right text-gray-500 text-sm">รวม</td>
                         <td className="pt-2 text-right font-bold text-green-700">{formatCurrency(subtotal)}</td>
                     </tr>
                 </tfoot>
