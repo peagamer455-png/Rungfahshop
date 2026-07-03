@@ -133,7 +133,7 @@ const POSView = ({ products, bills, loadData, setPopupContent, setShowPopup, nav
     setPopupContent({
         title: "📦 สรุปสินค้าที่ขายวันนี้",
         color: "green",
-        size: "lg",
+        size: "xxl",
         message: (
             <div className="max-h-[65vh] overflow-y-auto -mx-1 px-1">
                 {list.length === 0 ? (
