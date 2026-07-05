@@ -163,6 +163,8 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
 
     const todayKey = useMemo(() => toLocalDateKey(new Date()), []);
     const isToday = selectedDate === todayKey;
+    // ✅ แยกเคส "ยังโหลดข้อมูลไม่เสร็จ" ออกจาก "วันนี้ไม่มีบิลจริงๆ"
+    const isLoadingBills = bills === undefined || bills === null;
 
     const selectedDateLabel = useMemo(() => formatDateLabel(selectedDate), [selectedDate]);
 
@@ -431,7 +433,11 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
                         {!isToday && <span className="text-sm font-normal text-gray-400 ml-2">{selectedDateLabel}</span>}
                     </h2>
                     <div className="space-y-3">
-                        {todayBills.length > 0 ? (
+                        {isLoadingBills ? (
+                            <div className="bg-white p-6 rounded-xl shadow-md text-center text-gray-400 animate-pulse">
+                                กำลังโหลดข้อมูล...
+                            </div>
+                        ) : todayBills.length > 0 ? (
                             todayBills.map((bill) => (
                                 <HistoryBillCard
                                     key={bill.id}
