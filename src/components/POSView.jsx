@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Header } from './SharedUI'; // Import จาก SharedUI
+import React, { useMemo, useState } from 'react';
+import { Header } from './SharedUI';
 import { formatCurrency } from '../utils';
 import SummaryCard from './SummaryCard';
 import HistoryBillCard from './HistoryBillCard';
@@ -15,21 +15,53 @@ const FloatingActionButton = ({ onClick }) => (
     </button>
 );
 
+// ✅ Helper: แปลง Date เป็น "YYYY-MM-DD" ตามเวลาโลคัล (กันปัญหา timezone เพี้ยนจาก toISOString)
+const toLocalDateKey = (d) => {
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+};
+
 // ✅ activePromos ถูกบันทึกเป็น string รูปแบบ "{ชื่อโปร} ({จำนวนชุด} ชุด)" เสมอ (ดูจาก AddBillView.jsx)
 const PROMO_ENTRY_REGEX = /^(.*)\((\d+)\s*ชุด\)\s*$/;
 
 const POSView = ({ products, bills, promotions, loadData, setPopupContent, setShowPopup, navigateTo, sensitiveVisible, openPasswordModal, onToggleSensitive, setSidebarOpen }) => {
-    const todayDateString = useMemo(() => new Date().toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }), []);
+    // ✅ วันที่ที่กำลังดูสรุปอยู่ (default = วันนี้)
+    const [selectedDate, setSelectedDate] = useState(() => toLocalDateKey(new Date()));
 
+    const todayKey = useMemo(() => toLocalDateKey(new Date()), []);
+    const isToday = selectedDate === todayKey;
+
+    const selectedDateLabel = useMemo(() => {
+        const d = new Date(selectedDate + 'T00:00:00');
+        return d.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }, [selectedDate]);
+
+    const goToPrevDay = () => {
+        const d = new Date(selectedDate + 'T00:00:00');
+        d.setDate(d.getDate() - 1);
+        setSelectedDate(toLocalDateKey(d));
+    };
+
+    const goToNextDay = () => {
+        const d = new Date(selectedDate + 'T00:00:00');
+        d.setDate(d.getDate() + 1);
+        const next = toLocalDateKey(d);
+        if (next > todayKey) return; // กันเลื่อนไปวันอนาคต
+        setSelectedDate(next);
+    };
+
+    const goToToday = () => setSelectedDate(todayKey);
+
+    // ✅ เปลี่ยนจาก filter "วันนี้" ตายตัว เป็น filter ตาม selectedDate
     const todayBills = useMemo(() => {
-        const todayString = new Date().toISOString().split('T')[0];
         return (bills || []).filter(b => {
             if (!b.date) return false;
-            const billDateString = new Date(b.date).toISOString().split('T')[0];
-
-            return billDateString === todayString;
+            const billDateString = toLocalDateKey(new Date(b.date));
+            return billDateString === selectedDate;
         });
-    }, [bills]);
+    }, [bills, selectedDate]);
 
     const dailySummary = useMemo(() => {
         return todayBills.reduce((acc, b) => {
@@ -53,13 +85,10 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
                 acc.cash += cash;
                 acc.transfer += transfer;
 
-                // ถ้า cash+transfer ไม่ครบ total_net (บิลเก่าที่ข้อมูลไม่สมบูรณ์)
-                // ให้เอาส่วนที่ขาดไปใส่ cash
                 const diff = total_net - detailSum;
                 if (diff > 0) acc.cash += diff;
 
             } else {
-                // บิลเก่าที่ไม่มี payment_details เลย
                 if (b.payment_method === 'transfer') {
                     acc.transfer += total_net;
                 } else {
@@ -71,8 +100,6 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
         }, { totalsale: 0, totalcost: 0, cash: 0, transfer: 0 });
     }, [todayBills]);
 
-    // ✅ แยกยอดขายสินค้าเป็น "ราคาปกติ" กับ "โปรโมชั่น" โดยอิง activePromos + ตาราง promotions จริง
-    // (ไม่ใช้วิธีเทียบราคาต่อชิ้นแล้ว เพราะระบบนี้ item.price ไม่เคยเปลี่ยน ส่วนลดถูกหักเป็นก้อนที่ระดับบิลแทน)
     const productSalesSummary = useMemo(() => {
         const promoDefs = promotions || [];
         const normalMap = {};
@@ -93,7 +120,6 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
         todayBills.forEach(bill => {
             const items = bill.items || [];
 
-            // ขั้นที่ 1: หาว่าบิลนี้ใช้โปรอะไรบ้าง แล้วโปรนั้นๆ "กิน" สินค้าตัวไหนไปกี่ชิ้น/เป็นเงินเท่าไหร่
             const promoQtyByProduct = {};
             const promoRevenueByProduct = {};
             const promoNamesByProduct = {};
@@ -107,7 +133,7 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
                 if (sets <= 0) return;
 
                 const promo = promoDefs.find(p => p.name === promoName);
-                if (!promo) return; // โปรถูกลบ/แก้ชื่อไปแล้ว ไม่มีให้จับคู่ ก็ปล่อยผ่าน (นับเป็นราคาปกติ)
+                if (!promo) return;
 
                 if (promo.type === 'qty') {
                     const pItem = promo.items?.[0];
@@ -151,7 +177,6 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
                 }
             });
 
-            // ขั้นที่ 2: ไล่ทีละ item ในบิล หัก qty ส่วนที่โปรกินไปออก เหลือเท่าไหร่คือ "ราคาปกติ"
             items.forEach(item => {
                 const totalQty = Number(item.qty) || 0;
                 const price = Number(item.price) || 0;
@@ -166,7 +191,6 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
                 }
 
                 if (promoQty > 0) {
-                    // เผื่อกรณีข้อมูลไม่ครบ (promoQtyRaw > totalQty) ให้ลดสัดส่วนรายได้ตามจริง
                     const revenueRatio = promoQtyRaw > 0 ? (promoQty / promoQtyRaw) : 0;
                     const promoAmount = (promoRevenueByProduct[productId] || 0) * revenueRatio;
                     addTo(promoMap, productId, item.name, promoQty, promoAmount, promoNamesByProduct[productId]);
@@ -201,7 +225,6 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
         };
     }, [todayBills, promotions]);
 
-    // ฟังก์ชันจัดการการคลิกเปิด/ปิดข้อมูล Sensitive
     const handleToggleSensitive = () => {
         onToggleSensitive();
     };
@@ -256,7 +279,7 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
         );
 
         setPopupContent({
-            title: "📦 สรุปสินค้าที่ขายวันนี้",
+            title: `📦 สรุปสินค้าที่ขาย — ${selectedDateLabel}`,
             color: "green",
             size: "xl",
             message: (
@@ -294,13 +317,11 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
         setShowPopup(true);
     };
 
-
     return (
         <div className="bg-gray-50 min-h-screen pb-20">
-            {/* 1. ใช้ Header จาก SharedUI */}
             <Header
                 title="🛒 หน้าร้าน (POS)"
-                date={todayDateString}
+                date={selectedDateLabel}
                 sensitiveVisible={sensitiveVisible}
                 onToggleSensitive={handleToggleSensitive}
                 onToggleSidebar={() => setSidebarOpen(prev => !prev)}
@@ -309,7 +330,49 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
 
             <div className="p-4 sm:p-6">
 
-                {/* 2. สรุปยอด */}
+                {/* ✅ Date Navigator — เลื่อนวัน / เลือกวันที่ / กลับวันนี้ */}
+                <div className="flex items-center justify-between gap-2 mb-6 bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                    <button
+                        onClick={goToPrevDay}
+                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition"
+                        title="วันก่อนหน้า"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                        </svg>
+                    </button>
+
+                    <div className="flex items-center gap-2 flex-1 justify-center">
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            max={todayKey}
+                            onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+                            className="text-sm font-bold text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400"
+                        />
+                        {!isToday && (
+                            <button
+                                onClick={goToToday}
+                                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition whitespace-nowrap"
+                            >
+                                กลับวันนี้
+                            </button>
+                        )}
+                    </div>
+
+                    <button
+                        onClick={goToNextDay}
+                        disabled={isToday}
+                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        title="วันถัดไป"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                    </button>
+                </div>
+
+                {/* สรุปยอด */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
                     <SummaryCard
                         title="💰 ยอดขาย"
@@ -345,9 +408,12 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
                     />
                 </div>
 
-                {/* 3. รายการบิล */}
+                {/* รายการบิล */}
                 <div>
-                    <h2 className="text-xl font-bold text-green-700 mb-4">รายการบิลวันนี้ ({todayBills.length} บิล)</h2>
+                    <h2 className="text-xl font-bold text-green-700 mb-4">
+                        รายการบิล{isToday ? "วันนี้" : ""} ({todayBills.length} บิล)
+                        {!isToday && <span className="text-sm font-normal text-gray-400 ml-2">{selectedDateLabel}</span>}
+                    </h2>
                     <div className="space-y-3">
                         {todayBills.length > 0 ? (
                             todayBills.map((bill) => (
@@ -363,7 +429,7 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
                             ))
                         ) : (
                             <div className="bg-white p-6 rounded-xl shadow-md text-center text-gray-500">
-                                วันนี้ยังไม่มีรายการบิล
+                                {isToday ? "วันนี้ยังไม่มีรายการบิล" : "ไม่มีรายการบิลในวันนี้"}
                             </div>
                         )}
                     </div>
