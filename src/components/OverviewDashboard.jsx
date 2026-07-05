@@ -39,22 +39,34 @@ const ComparisonCard = ({ title, comparison, comparisonLabel, formatCurrency }) 
       </div>
 
       <div className="space-y-3">
+        {/* ยอดขาย */}
         <div>
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] text-slate-400 font-medium">ยอดขาย</span>
             <GrowthPill value={comparison.sale_growth} />
           </div>
-          <span className="text-lg font-extrabold text-slate-800">{formatCurrency(comparison.current_sale)}</span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-lg font-extrabold text-slate-800">{formatCurrency(comparison.current_sale)}</span>
+            <span className="text-[11px] text-slate-400">
+              vs <span className="font-semibold text-slate-500">{formatCurrency(comparison.previous_sale)}</span>
+            </span>
+          </div>
         </div>
 
         <div className="h-px bg-slate-100" />
 
+        {/* กำไร */}
         <div>
           <div className="flex items-center justify-between mb-1">
             <span className="text-[11px] text-slate-400 font-medium">กำไร</span>
             <GrowthPill value={comparison.profit_growth} />
           </div>
-          <span className="text-lg font-extrabold text-emerald-600">{formatCurrency(comparison.current_profit)}</span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-lg font-extrabold text-emerald-600">{formatCurrency(comparison.current_profit)}</span>
+            <span className="text-[11px] text-slate-400">
+              vs <span className="font-semibold text-slate-500">{formatCurrency(comparison.previous_profit)}</span>
+            </span>
+          </div>
         </div>
       </div>
 
