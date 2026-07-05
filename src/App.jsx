@@ -234,15 +234,16 @@ const App = () => {
               }
             />
             <Route
-              path="/dashboard"
-              element={
-                <OverviewDashboard
-                  bills={bills}
-                  formatCurrency={formatCurrency}
-                  openPasswordModal={openPasswordModal}
-                />
-              }
-            />
+                path="/dashboard"
+                element={
+                  <OverviewDashboard
+                    bills={bills}
+                    formatCurrency={formatCurrency}
+                    openPasswordModal={openPasswordModal}
+                    setSidebarOpen={setIsSidebarOpen}
+                  />
+                }
+              />
             <Route
               path="/inventory"
               element={
