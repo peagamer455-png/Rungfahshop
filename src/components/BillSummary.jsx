@@ -172,7 +172,7 @@ useEffect(() => {
 
             <button
                 onClick={() => onSave({ payMode, paymentDetails: { method: payMode, cash: cashToRecord, transfer }, printSize })}
-                disabled={!canSave || isSubmitting || (payMode !== 'transfer' && cash < netTotal)}
+                disabled={!canSave || isSubmitting || (payMode === 'cash' && cash < netTotal)
                 className="w-full mt-4 py-5 bg-white text-black rounded-xl font-black text-xl hover:bg-gray-100 transition-all shadow-xl disabled:opacity-50 border-b-4 border-gray-300"
             >
                 {isSubmitting ? 'กำลังบันทึก...' : '💾 บันทึกข้อมูล'}
