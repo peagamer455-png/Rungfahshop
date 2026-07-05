@@ -385,7 +385,7 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
                 sensitiveVisible={sensitiveVisible}
                 onToggleSensitive={handleToggleSensitive}
                 onToggleSidebar={() => setSidebarOpen(prev => !prev)}
-                onOpenProductSummary={openProductSummary}
+                onOpenProductSummary={() => openProductSummary()}
             />
 
             <div className="p-4 sm:p-6">
