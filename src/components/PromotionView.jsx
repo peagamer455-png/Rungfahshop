@@ -275,7 +275,7 @@ const PromotionView = ({ products, setPopupContent, setShowPopup, setSidebarOpen
   return (
     <div className="p-4 sm:p-8 bg-gray-50 min-h-screen">
       <Header title={`🎁 จัดการโปรโมชั่น`} onToggleSidebar={() => setSidebarOpen(prev => !prev)}/>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 mt-6">
         <div className="lg:col-span-1">{renderForm()}</div>
         <div className="lg:col-span-2">{renderList()}</div>
       </div>
