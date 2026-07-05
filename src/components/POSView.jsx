@@ -23,8 +23,139 @@ const toLocalDateKey = (d) => {
     return `${yyyy}-${mm}-${dd}`;
 };
 
+const formatDateLabel = (dateKey) => {
+    const d = new Date(dateKey + 'T00:00:00');
+    return d.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+};
+
 // ✅ activePromos ถูกบันทึกเป็น string รูปแบบ "{ชื่อโปร} ({จำนวนชุด} ชุด)" เสมอ (ดูจาก AddBillView.jsx)
 const PROMO_ENTRY_REGEX = /^(.*)\((\d+)\s*ชุด\)\s*$/;
+
+// ✅ Pure function: คำนวณสรุปยอดขายสินค้าจาก bills ชุดใดก็ได้ (ไม่ผูกกับ state ของวันที่หลัก)
+// ทำให้ popup สามารถคำนวณสรุปของ "วันอื่น" ได้โดยไม่ต้องเปลี่ยนวันที่ของหน้าเบื้องหลัง
+const computeProductSalesSummary = (billsForDate, promoDefs) => {
+    const normalMap = {};
+    const promoMap = {};
+
+    const addTo = (map, productId, name, qty, amount, promoNamesSet) => {
+        if (qty <= 0) return;
+        if (!map[productId]) {
+            map[productId] = { productId, name, qty: 0, amount: 0, promoNames: new Set() };
+        }
+        map[productId].qty += qty;
+        map[productId].amount += amount;
+        if (promoNamesSet) {
+            promoNamesSet.forEach(n => map[productId].promoNames.add(n));
+        }
+    };
+
+    (billsForDate || []).forEach(bill => {
+        const items = bill.items || [];
+
+        const promoQtyByProduct = {};
+        const promoRevenueByProduct = {};
+        const promoNamesByProduct = {};
+
+        (bill.activePromos || []).forEach(entry => {
+            const match = String(entry).match(PROMO_ENTRY_REGEX);
+            if (!match) return;
+
+            const promoName = match[1].trim();
+            const sets = Number(match[2]) || 0;
+            if (sets <= 0) return;
+
+            const promo = (promoDefs || []).find(p => p.name === promoName);
+            if (!promo) return;
+
+            if (promo.type === 'qty') {
+                const pItem = promo.items?.[0];
+                if (!pItem) return;
+
+                const billItem = items.find(i => i.productId === pItem.id);
+                if (!billItem) return;
+
+                const qtyConsumed = sets * (Number(promo.min_qty) || 0);
+                const revenue = sets * (Number(promo.discount_price) || 0);
+
+                promoQtyByProduct[pItem.id] = (promoQtyByProduct[pItem.id] || 0) + qtyConsumed;
+                promoRevenueByProduct[pItem.id] = (promoRevenueByProduct[pItem.id] || 0) + revenue;
+                if (!promoNamesByProduct[pItem.id]) promoNamesByProduct[pItem.id] = new Set();
+                promoNamesByProduct[pItem.id].add(promo.name);
+
+            } else if (promo.type === 'bundle') {
+                const parts = (promo.items || []).map(pItem => {
+                    const requiredQty = (pItem.qty && pItem.qty > 0) ? pItem.qty : 1;
+                    const billItem = items.find(i => i.productId === pItem.id);
+                    const unitPrice = billItem ? (Number(billItem.price) || 0) : 0;
+                    return { id: pItem.id, requiredQty, normalValue: unitPrice * requiredQty };
+                });
+
+                const totalNormalPerSet = parts.reduce((sum, p) => sum + p.normalValue, 0);
+                if (totalNormalPerSet <= 0) return;
+
+                const totalRevenue = sets * (Number(promo.discount_price) || 0);
+
+                parts.forEach(p => {
+                    if (p.normalValue <= 0) return;
+                    const qtyConsumed = sets * p.requiredQty;
+                    const share = p.normalValue / totalNormalPerSet;
+                    const revenue = totalRevenue * share;
+
+                    promoQtyByProduct[p.id] = (promoQtyByProduct[p.id] || 0) + qtyConsumed;
+                    promoRevenueByProduct[p.id] = (promoRevenueByProduct[p.id] || 0) + revenue;
+                    if (!promoNamesByProduct[p.id]) promoNamesByProduct[p.id] = new Set();
+                    promoNamesByProduct[p.id].add(promo.name);
+                });
+            }
+        });
+
+        items.forEach(item => {
+            const totalQty = Number(item.qty) || 0;
+            const price = Number(item.price) || 0;
+            const productId = item.productId;
+
+            const promoQtyRaw = promoQtyByProduct[productId] || 0;
+            const promoQty = Math.min(promoQtyRaw, totalQty);
+            const normalQty = totalQty - promoQty;
+
+            if (normalQty > 0) {
+                addTo(normalMap, productId, item.name, normalQty, normalQty * price, null);
+            }
+
+            if (promoQty > 0) {
+                const revenueRatio = promoQtyRaw > 0 ? (promoQty / promoQtyRaw) : 0;
+                const promoAmount = (promoRevenueByProduct[productId] || 0) * revenueRatio;
+                addTo(promoMap, productId, item.name, promoQty, promoAmount, promoNamesByProduct[productId]);
+            }
+        });
+    });
+
+    const toList = (map) => Object.values(map)
+        .map(g => ({ ...g, promoNames: Array.from(g.promoNames || []) }))
+        .sort((a, b) => b.amount - a.amount);
+
+    const normalList = toList(normalMap);
+    const promoItemList = toList(promoMap);
+
+    const sumQty = (list) => list.reduce((s, g) => s + g.qty, 0);
+    const sumAmount = (list) => list.reduce((s, g) => s + g.amount, 0);
+
+    const normalTotal = sumAmount(normalList);
+    const normalQty = sumQty(normalList);
+    const promoTotal = sumAmount(promoItemList);
+    const promoQty = sumQty(promoItemList);
+
+    return {
+        normalList,
+        promoList: promoItemList,
+        normalTotal,
+        normalQty,
+        promoTotal,
+        promoQty,
+        grandTotal: normalTotal + promoTotal,
+        grandQty: normalQty + promoQty,
+    };
+};
 
 const POSView = ({ products, bills, promotions, loadData, setPopupContent, setShowPopup, navigateTo, sensitiveVisible, openPasswordModal, onToggleSensitive, setSidebarOpen }) => {
     // ✅ วันที่ที่กำลังดูสรุปอยู่ (default = วันนี้)
@@ -33,35 +164,17 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
     const todayKey = useMemo(() => toLocalDateKey(new Date()), []);
     const isToday = selectedDate === todayKey;
 
-    const selectedDateLabel = useMemo(() => {
-        const d = new Date(selectedDate + 'T00:00:00');
-        return d.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    }, [selectedDate]);
+    const selectedDateLabel = useMemo(() => formatDateLabel(selectedDate), [selectedDate]);
 
-    const goToPrevDay = () => {
-        const d = new Date(selectedDate + 'T00:00:00');
-        d.setDate(d.getDate() - 1);
-        setSelectedDate(toLocalDateKey(d));
-    };
-
-    const goToNextDay = () => {
-        const d = new Date(selectedDate + 'T00:00:00');
-        d.setDate(d.getDate() + 1);
-        const next = toLocalDateKey(d);
-        if (next > todayKey) return; // กันเลื่อนไปวันอนาคต
-        setSelectedDate(next);
-    };
-
-    const goToToday = () => setSelectedDate(todayKey);
-
-    // ✅ เปลี่ยนจาก filter "วันนี้" ตายตัว เป็น filter ตาม selectedDate
-    const todayBills = useMemo(() => {
+    const getBillsForDate = (dateKey) => {
         return (bills || []).filter(b => {
             if (!b.date) return false;
-            const billDateString = toLocalDateKey(new Date(b.date));
-            return billDateString === selectedDate;
+            return toLocalDateKey(new Date(b.date)) === dateKey;
         });
-    }, [bills, selectedDate]);
+    };
+
+    // ✅ เปลี่ยนจาก filter "วันนี้" ตายตัว เป็น filter ตาม selectedDate
+    const todayBills = useMemo(() => getBillsForDate(selectedDate), [bills, selectedDate]);
 
     const dailySummary = useMemo(() => {
         return todayBills.reduce((acc, b) => {
@@ -100,144 +213,45 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
         }, { totalsale: 0, totalcost: 0, cash: 0, transfer: 0 });
     }, [todayBills]);
 
-    const productSalesSummary = useMemo(() => {
-        const promoDefs = promotions || [];
-        const normalMap = {};
-        const promoMap = {};
-
-        const addTo = (map, productId, name, qty, amount, promoNamesSet) => {
-            if (qty <= 0) return;
-            if (!map[productId]) {
-                map[productId] = { productId, name, qty: 0, amount: 0, promoNames: new Set() };
-            }
-            map[productId].qty += qty;
-            map[productId].amount += amount;
-            if (promoNamesSet) {
-                promoNamesSet.forEach(n => map[productId].promoNames.add(n));
-            }
-        };
-
-        todayBills.forEach(bill => {
-            const items = bill.items || [];
-
-            const promoQtyByProduct = {};
-            const promoRevenueByProduct = {};
-            const promoNamesByProduct = {};
-
-            (bill.activePromos || []).forEach(entry => {
-                const match = String(entry).match(PROMO_ENTRY_REGEX);
-                if (!match) return;
-
-                const promoName = match[1].trim();
-                const sets = Number(match[2]) || 0;
-                if (sets <= 0) return;
-
-                const promo = promoDefs.find(p => p.name === promoName);
-                if (!promo) return;
-
-                if (promo.type === 'qty') {
-                    const pItem = promo.items?.[0];
-                    if (!pItem) return;
-
-                    const billItem = items.find(i => i.productId === pItem.id);
-                    if (!billItem) return;
-
-                    const qtyConsumed = sets * (Number(promo.min_qty) || 0);
-                    const revenue = sets * (Number(promo.discount_price) || 0);
-
-                    promoQtyByProduct[pItem.id] = (promoQtyByProduct[pItem.id] || 0) + qtyConsumed;
-                    promoRevenueByProduct[pItem.id] = (promoRevenueByProduct[pItem.id] || 0) + revenue;
-                    if (!promoNamesByProduct[pItem.id]) promoNamesByProduct[pItem.id] = new Set();
-                    promoNamesByProduct[pItem.id].add(promo.name);
-
-                } else if (promo.type === 'bundle') {
-                    const parts = (promo.items || []).map(pItem => {
-                        const requiredQty = (pItem.qty && pItem.qty > 0) ? pItem.qty : 1;
-                        const billItem = items.find(i => i.productId === pItem.id);
-                        const unitPrice = billItem ? (Number(billItem.price) || 0) : 0;
-                        return { id: pItem.id, requiredQty, normalValue: unitPrice * requiredQty };
-                    });
-
-                    const totalNormalPerSet = parts.reduce((sum, p) => sum + p.normalValue, 0);
-                    if (totalNormalPerSet <= 0) return;
-
-                    const totalRevenue = sets * (Number(promo.discount_price) || 0);
-
-                    parts.forEach(p => {
-                        if (p.normalValue <= 0) return;
-                        const qtyConsumed = sets * p.requiredQty;
-                        const share = p.normalValue / totalNormalPerSet;
-                        const revenue = totalRevenue * share;
-
-                        promoQtyByProduct[p.id] = (promoQtyByProduct[p.id] || 0) + qtyConsumed;
-                        promoRevenueByProduct[p.id] = (promoRevenueByProduct[p.id] || 0) + revenue;
-                        if (!promoNamesByProduct[p.id]) promoNamesByProduct[p.id] = new Set();
-                        promoNamesByProduct[p.id].add(promo.name);
-                    });
-                }
-            });
-
-            items.forEach(item => {
-                const totalQty = Number(item.qty) || 0;
-                const price = Number(item.price) || 0;
-                const productId = item.productId;
-
-                const promoQtyRaw = promoQtyByProduct[productId] || 0;
-                const promoQty = Math.min(promoQtyRaw, totalQty);
-                const normalQty = totalQty - promoQty;
-
-                if (normalQty > 0) {
-                    addTo(normalMap, productId, item.name, normalQty, normalQty * price, null);
-                }
-
-                if (promoQty > 0) {
-                    const revenueRatio = promoQtyRaw > 0 ? (promoQty / promoQtyRaw) : 0;
-                    const promoAmount = (promoRevenueByProduct[productId] || 0) * revenueRatio;
-                    addTo(promoMap, productId, item.name, promoQty, promoAmount, promoNamesByProduct[productId]);
-                }
-            });
-        });
-
-        const toList = (map) => Object.values(map)
-            .map(g => ({ ...g, promoNames: Array.from(g.promoNames || []) }))
-            .sort((a, b) => b.amount - a.amount);
-
-        const normalList = toList(normalMap);
-        const promoItemList = toList(promoMap);
-
-        const sumQty = (list) => list.reduce((s, g) => s + g.qty, 0);
-        const sumAmount = (list) => list.reduce((s, g) => s + g.amount, 0);
-
-        const normalTotal = sumAmount(normalList);
-        const normalQty = sumQty(normalList);
-        const promoTotal = sumAmount(promoItemList);
-        const promoQty = sumQty(promoItemList);
-
-        return {
-            normalList,
-            promoList: promoItemList,
-            normalTotal,
-            normalQty,
-            promoTotal,
-            promoQty,
-            grandTotal: normalTotal + promoTotal,
-            grandQty: normalQty + promoQty,
-        };
-    }, [todayBills, promotions]);
+    const productSalesSummary = useMemo(
+        () => computeProductSalesSummary(todayBills, promotions),
+        [todayBills, promotions]
+    );
 
     const handleToggleSensitive = () => {
         onToggleSensitive();
     };
 
-    const openProductSummary = () => {
-        const {
-            normalList,
-            promoList,
-            grandTotal,
-            grandQty,
-            normalTotal,
-            promoTotal,
-        } = productSalesSummary;
+    // ✅ dateKey เป็น optional — ไม่ใส่ = ใช้ selectedDate ปัจจุบันของหน้า
+    // popup มี navigator ของตัวเอง เปลี่ยนวันในนี้ได้เลยโดยไม่ต้องปิด popup
+    const openProductSummary = (dateKey = selectedDate) => {
+        const billsForDate = getBillsForDate(dateKey);
+        const summary = computeProductSalesSummary(billsForDate, promotions);
+        const { normalList, promoList, grandTotal, grandQty, normalTotal, promoTotal } = summary;
+        const dateLabel = formatDateLabel(dateKey);
+        const isDateToday = dateKey === todayKey;
+
+        const changeDate = (newKey) => {
+            if (newKey > todayKey) return;
+            setSelectedDate(newKey);
+            openProductSummary(newKey);
+        };
+
+        const handlePrev = () => {
+            const d = new Date(dateKey + 'T00:00:00');
+            d.setDate(d.getDate() - 1);
+            changeDate(toLocalDateKey(d));
+        };
+
+        const handleNext = () => {
+            const d = new Date(dateKey + 'T00:00:00');
+            d.setDate(d.getDate() + 1);
+            changeDate(toLocalDateKey(d));
+        };
+
+        const handlePickDate = (e) => {
+            if (e.target.value) changeDate(e.target.value);
+        };
 
         const renderTable = (items, subtotal, showPromoBadge) => (
             <table className="w-full text-base mb-2">
@@ -279,13 +293,57 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
         );
 
         setPopupContent({
-            title: `📦 สรุปสินค้าที่ขาย — ${selectedDateLabel}`,
+            title: `📦 สรุปสินค้าที่ขาย`,
             color: "green",
             size: "xl",
             message: (
                 <div className="max-h-[65vh] overflow-y-auto -mx-1 px-1">
+                    {/* ✅ Date navigator ชิดขวา — เปลี่ยนวันได้โดยไม่ต้องปิด popup */}
+                    <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-gray-100 sticky top-0 bg-white z-10">
+                        <span className="text-sm font-semibold text-gray-600">{dateLabel}</span>
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                onClick={handlePrev}
+                                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition"
+                                title="วันก่อนหน้า"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                </svg>
+                            </button>
+
+                            <input
+                                type="date"
+                                value={dateKey}
+                                max={todayKey}
+                                onChange={handlePickDate}
+                                className="text-xs font-bold text-gray-700 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-green-400"
+                            />
+
+                            {!isDateToday && (
+                                <button
+                                    onClick={() => changeDate(todayKey)}
+                                    className="text-xs font-bold px-2 py-1 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition whitespace-nowrap"
+                                >
+                                    วันนี้
+                                </button>
+                            )}
+
+                            <button
+                                onClick={handleNext}
+                                disabled={isDateToday}
+                                className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                                title="วันถัดไป"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
                     {normalList.length === 0 && promoList.length === 0 ? (
-                        <p className="text-center text-gray-500 py-8">วันนี้ยังไม่มีรายการขาย</p>
+                        <p className="text-center text-gray-500 py-8">ยังไม่มีรายการขายในวันนี้</p>
                     ) : (
                         <>
                             {normalList.length > 0 && (
@@ -329,48 +387,6 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
             />
 
             <div className="p-4 sm:p-6">
-
-                {/* ✅ Date Navigator — เลื่อนวัน / เลือกวันที่ / กลับวันนี้ */}
-                <div className="flex items-center justify-between gap-2 mb-6 bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                    <button
-                        onClick={goToPrevDay}
-                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition"
-                        title="วันก่อนหน้า"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                        </svg>
-                    </button>
-
-                    <div className="flex items-center gap-2 flex-1 justify-center">
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            max={todayKey}
-                            onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-                            className="text-sm font-bold text-gray-700 border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-green-400"
-                        />
-                        {!isToday && (
-                            <button
-                                onClick={goToToday}
-                                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition whitespace-nowrap"
-                            >
-                                กลับวันนี้
-                            </button>
-                        )}
-                    </div>
-
-                    <button
-                        onClick={goToNextDay}
-                        disabled={isToday}
-                        className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                        title="วันถัดไป"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                    </button>
-                </div>
 
                 {/* สรุปยอด */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
