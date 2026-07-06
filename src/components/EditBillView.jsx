@@ -132,6 +132,8 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
             setPopupContent({ title: "⚠️ ผิดพลาด", message: "ไม่สามารถอัปเดตสต็อกได้", color: "red" });
             setShowPopup(true);
             loadData();
+        } else {
+            await loadData();
         }
     }
 };
@@ -175,6 +177,7 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
             setShowPopup(true);
             return;
         }
+        await loadData();
         setSearchTerm("");
     };
 
