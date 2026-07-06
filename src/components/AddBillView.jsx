@@ -156,6 +156,8 @@ const AddBillView = ({
             setPopupContent({ title: "⚠️ ผิดพลาด", message: "ไม่สามารถอัปเดตสต็อกได้", color: "red" });
             setShowPopup(true);
             loadData();
+        } else {
+            await loadData();
         }
     }
 };
@@ -200,6 +202,7 @@ const AddBillView = ({
       setShowPopup(true);
       return;
     }
+    await loadData();
     setSearchTerm("");
   };
 
