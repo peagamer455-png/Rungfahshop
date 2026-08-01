@@ -208,7 +208,14 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
                 onClick={() => onSave({
                     payMode,
                     paymentDetails: { method: payMode, cash: cashToRecord, transfer },
-                    printSize
+                    printSize,
+                    // ✅ ส่งข้อมูล VAT กลับไปให้ parent ใช้คำนวณ total_net (ไม่ได้สร้างคอลัมน์ใหม่)
+                    vat: {
+                        enabled: vatEnabled,
+                        rate: VAT_RATE,
+                        amount: vatAmount,
+                        totalWithVat: grandTotal
+                    }
                 })}
                 disabled={!canSave || isSubmitting || (payMode === 'cash' && cash < grandTotal)}
                 className="w-full mt-4 py-5 bg-white text-black rounded-xl font-black text-xl hover:bg-gray-100 transition-all shadow-xl disabled:opacity-50 border-b-4 border-gray-300"
