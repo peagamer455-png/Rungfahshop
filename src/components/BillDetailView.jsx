@@ -138,6 +138,14 @@ const BillDetailView = ({ bills, products, navigateTo, openPasswordModal, curren
                                 <span className="font-mono text-red-500 font-bold">-{formatCurrency(bill.discount)}</span>
                             </div>
                         )}
+
+                        {/* VAT (แสดงเฉพาะเมื่อติ๊ก) */}
+                        {bill.payment_details?.vatEnabled && (
+                            <div className="flex justify-between items-center">
+                                <span className="text-blue-500 font-bold">+VAT 7%</span>
+                                <span className="font-mono text-blue-600 font-bold">+{formatCurrency(bill.payment_details.vatAmount || 0)}</span>
+                            </div>
+                        )}
                     
                         {/* ยอดสุทธิ */}
                         <div className={`flex justify-between items-center pt-3 border-t border-slate-200`}>
