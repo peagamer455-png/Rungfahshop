@@ -239,6 +239,7 @@ const EditBillView = ({ currentBillId, bills, products, loadData, putData, navig
         try {
             const totalAmount = billItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
             const totalcost = billItems.reduce((acc, item) => acc + (item.cost * item.qty), 0);
+            const netBeforeVat = totalAmount - discount;
             const total_net = totalAmount - discount;
             const profit = total_net - totalcost;
 
