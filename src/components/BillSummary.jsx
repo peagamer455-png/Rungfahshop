@@ -33,7 +33,7 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
 
     const [payMode, setPayMode] = useState(initialPaymentDetails?.method || 'cash');
 
-    // สถานะติ๊ก VAT
+    // สถานะติ๊ก VAT — ดึงค่าเดิมจากบิลที่กำลังแก้ไข (ถ้ามี)
     const [vatEnabled, setVatEnabled] = useState(initialPaymentDetails?.vatEnabled || false);
 
     const netTotal = Math.max(0, subTotal - discount);
@@ -211,7 +211,7 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
                         method: payMode,
                         cash: cashToRecord,
                         transfer,
-                        // ✅ เก็บสถานะ VAT ไว้ใน payment_details (คอลัมน์เดิม) เพื่อดึงกลับมาได้ตอนแก้ไขบิล
+                        // เก็บสถานะ VAT ไว้ใน payment_details (คอลัมน์เดิม) เพื่อดึงกลับมาได้ตอนแก้ไขบิลและตอนปริ้น
                         vatEnabled,
                         vatRate: VAT_RATE,
                         vatAmount
