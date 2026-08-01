@@ -18,6 +18,7 @@ const printReceipt = (billData) => {
     const cleanBillNo = String(rawBillNo).replace(/[^\x20-\x7Eก-ฮะ-์]/g, '').trim();
     const fileIdentifier = cleanBillNo !== "000" ? cleanBillNo : "000";
     const totalDiscount = totalBeforeDiscount - billData.totalsale;
+    const vatInfo = billData.payment_details?.vatEnabled ? billData.payment_details : null;
 
     const receiptContent = `
     <div style="font-family: 'Tahoma', sans-serif; width: 72mm; font-size: 12px; color: #000; padding: 5px;">
@@ -65,6 +66,7 @@ const printReceipt = (billData) => {
         <div style="text-align: right; font-size: 11px;">
             <div style="margin-bottom: 2px;">ยอดรวมสินค้า: ${formatCurrency(totalBeforeDiscount)}</div>
             ${displayDiscount > 0 ? `<div style="color: #000; margin-bottom: 2px;">ส่วนลด: -${formatCurrency(discount)}</div>` : ''}
+            ${vatInfo ? `<div style="margin-bottom: 2px;">+VAT 7%: +${formatCurrency(vatInfo.vatAmount || 0)}</div>` : ''}
             <div style="font-weight: bold; font-size: 14px; margin-top: 5px;">ยอดสุทธิ: ${formatCurrency(totalAfterDiscount)}</div>
         </div>
         
@@ -105,6 +107,7 @@ const printA4 = (billData) => {
     const rawBillNo = billData.bill_number || billData.billNumber || billData.bill_no || billData.no || billData.id || "000";
     const cleanBillNo = String(rawBillNo).replace(/[^\x20-\x7Eก-ฮะ-์]/g, '').trim();
     const fileIdentifier = cleanBillNo !== "000" ? cleanBillNo : "000";
+    const vatInfo = billData.payment_details?.vatEnabled ? billData.payment_details : null;
 
     const content = `
         <div style="font-family: 'Noto Serif Thai', sans-serif; width: 100%; box-sizing: border-box; background: #fff; padding: 10px;">
@@ -155,6 +158,11 @@ const printA4 = (billData) => {
                     <span>${formatCurrency(totalBeforeDiscount)}</span>
                 </div>
                 ${displayDiscount > 0 ? `<div style="color: #000; margin-bottom: 2px;">ส่วนลด: -${formatCurrency(discount)}</div>` : ''}
+                ${vatInfo ? `
+                <div style="width: 250px; display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>+VAT 7%:</span>
+                    <span>+${formatCurrency(vatInfo.vatAmount || 0)}</span>
+                </div>` : ''}
                 <div style="width: 250px; display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; border-top: 1px solid #333; margin-top: 5px; padding-top: 5px;">
                     <span>ยอดจ่ายสุทธิ:</span>
                     <span>${formatCurrency(totalAfterDiscount)}</span>
