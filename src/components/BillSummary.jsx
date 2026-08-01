@@ -207,9 +207,16 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
             <button
                 onClick={() => onSave({
                     payMode,
-                    paymentDetails: { method: payMode, cash: cashToRecord, transfer },
+                    paymentDetails: {
+                        method: payMode,
+                        cash: cashToRecord,
+                        transfer,
+                        // ✅ เก็บสถานะ VAT ไว้ใน payment_details (คอลัมน์เดิม) เพื่อดึงกลับมาได้ตอนแก้ไขบิล
+                        vatEnabled,
+                        vatRate: VAT_RATE,
+                        vatAmount
+                    },
                     printSize,
-                    // ✅ ส่งข้อมูล VAT กลับไปให้ parent ใช้คำนวณ total_net (ไม่ได้สร้างคอลัมน์ใหม่)
                     vat: {
                         enabled: vatEnabled,
                         rate: VAT_RATE,
