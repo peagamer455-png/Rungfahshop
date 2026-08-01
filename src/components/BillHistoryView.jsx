@@ -17,14 +17,18 @@ const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPo
   const itemsPerPage = 15;
   const SENSITIVE_PASSWORD = '261250'; // รหัสผ่านสำหรับลบประวัติ
 
+ const normalize = (str) => str.toString().toLowerCase().replace(/\s+/g, '');
+
   const filteredBills = useMemo(() => {
     let list = bills || [];
     if (filterTerm) {
-      const lowerFilter = filterTerm.toString().toLowerCase();
+      const normalizedFilter = normalize(filterTerm);
       list = list.filter(bill => {
-        if (bill.id && bill.id.toString().includes(lowerFilter)) return true;
-        if (bill.customer && bill.customer.toLowerCase().includes(lowerFilter)) return true;
-        if (bill.items && bill.items.some(item => item.name.toLowerCase().includes(lowerFilter))) return true;
+        if (bill.id && normalize(bill.id).includes(normalizedFilter)) return true;
+        if (bill.billNumber && normalize(bill.billNumber).includes(normalizedFilter)) return true;
+        if (bill.customer && normalize(bill.customer).includes(normalizedFilter)) return true;
+        if (bill.customer_detail && normalize(bill.customer_detail).includes(normalizedFilter)) return true;
+        if (bill.items && bill.items.some(item => normalize(item.name).includes(normalizedFilter))) return true;
         return false;
       });
     }
