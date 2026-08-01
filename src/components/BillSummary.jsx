@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { formatCurrency } from '../utils';
 
+const VAT_RATE = 0.07;
+
 const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave, isSubmitting, canSave, theme = 'green', printSize, setPrintSize, initialPaymentDetails }) => {
     const colors = {
         green: {
@@ -28,42 +30,56 @@ const BillSummary = ({ subTotal, totalsale, discount, activePromos = [], onSave,
     const btnActive = isGreen ? "bg-green-500" : "bg-yellow-400 text-yellow-900";
     const btnInactive = isGreen ? "bg-green-800" : "bg-yellow-700";
     const c = colors[theme];
+
     const [payMode, setPayMode] = useState(initialPaymentDetails?.method || 'cash');
-    const [cash, setCash] = useState(() => {
-    if (initialPaymentDetails?.method === 'transfer') return 0;
-    if (initialPaymentDetails?.cash != null) return initialPaymentDetails.cash;
-    return totalsale;
-});
+
+    // สถานะติ๊ก VAT
+    const [vatEnabled, setVatEnabled] = useState(initialPaymentDetails?.vatEnabled || false);
+
     const netTotal = Math.max(0, subTotal - discount);
+
+    // คำนวณ VAT และยอดรวมที่ใช้จริงในการรับเงิน/บันทึก
+    const vatAmount = vatEnabled ? Math.round(netTotal * VAT_RATE * 100) / 100 : 0;
+    const grandTotal = netTotal + vatAmount;
+
+    const [cash, setCash] = useState(() => {
+        if (initialPaymentDetails?.method === 'transfer') return 0;
+        if (initialPaymentDetails?.cash != null) return initialPaymentDetails.cash;
+        return totalsale;
+    });
 
     const handlePrintSizeChange = (size) => {
         setPrintSize(size);
         localStorage.setItem('lastPrintSize', size);
     };
 
-    useEffect(() => {
-    if (payMode === 'cash') setCash(netTotal);
-    else if (payMode === 'transfer') setCash(0);
-}, [netTotal]); // ไม่ใส่ payMode ใน dependency!
-
     const isFirstRender = useRef(true);
 
-// แทนที่ useEffect เดิม
-useEffect(() => {
-    if (isFirstRender.current) {
-        isFirstRender.current = false;
-        return;
-    }
-    if (payMode === 'cash') setCash(netTotal);
-    else if (payMode === 'transfer') setCash(0);
-}, [netTotal]);
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+        if (payMode === 'cash') setCash(grandTotal);
+        else if (payMode === 'transfer') setCash(0);
+    }, [grandTotal]);
 
-    const transfer = Math.max(0, netTotal - cash);
+    const transfer = Math.max(0, grandTotal - cash);
 
     const handleModeChange = (mode) => {
         setPayMode(mode);
-        if (mode === 'cash') setCash(netTotal);
+        if (mode === 'cash') setCash(grandTotal);
         if (mode === 'transfer') setCash(0);
+    };
+
+    // ติ๊ก/ยกเลิก VAT — ปรับยอดเงินสดตามโหมดปัจจุบันทันที
+    const handleVatToggle = () => {
+        const nextVatEnabled = !vatEnabled;
+        const nextVat = nextVatEnabled ? Math.round(netTotal * VAT_RATE * 100) / 100 : 0;
+        const nextGrandTotal = netTotal + nextVat;
+        setVatEnabled(nextVatEnabled);
+        if (payMode === 'cash') setCash(nextGrandTotal);
+        else if (payMode === 'transfer') setCash(0);
     };
 
     const handleCashChange = (val) => {
@@ -72,8 +88,8 @@ useEffect(() => {
         setCash(value);
     };
 
-    // ยอดเงินสดที่บันทึกจริง = ไม่เกิน netTotal (ส่วนที่เกินคือเงินทอน ไม่ใช่รายรับ)
-    const cashToRecord = Math.min(cash, netTotal);
+    // ยอดเงินสดที่บันทึกจริง = ไม่เกิน grandTotal (ส่วนที่เกินคือเงินทอน ไม่ใช่รายรับ)
+    const cashToRecord = Math.min(cash, grandTotal);
 
     return (
         <div className={`sticky top-20 ${bgMain} text-white p-6 rounded-xl shadow-2xl space-y-4 border ${borderMain}`}>
@@ -106,9 +122,30 @@ useEffect(() => {
                 </div>
             )}
 
+            {/* ปุ่มติ๊ก VAT */}
+            <label className="flex items-center justify-between bg-white/10 p-3 rounded-lg border border-white/20 cursor-pointer select-none">
+                <span className="text-sm font-bold">ออกใบกำกับภาษี (VAT 7%)</span>
+                <button
+                    type="button"
+                    onClick={handleVatToggle}
+                    className={`relative w-12 h-6 rounded-full transition-colors ${vatEnabled ? 'bg-white' : 'bg-black/30'}`}
+                >
+                    <span
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-transform ${vatEnabled ? `translate-x-6 ${isGreen ? 'bg-green-700' : 'bg-yellow-700'}` : 'bg-white/70'}`}
+                    />
+                </button>
+            </label>
+
+            {vatEnabled && (
+                <div className="flex justify-between items-center text-sm font-bold text-yellow-100">
+                    <span>VAT 7%</span>
+                    <span>+{formatCurrency(vatAmount)}</span>
+                </div>
+            )}
+
             <div className={`flex justify-between items-center text-xl font-black pt-2 border-t ${borderMain} border-dashed`}>
-                <span className="text-white/70">ยอดสุทธิ</span>
-                <span className="text-3xl text-white drop-shadow-md">{formatCurrency(netTotal)}</span>
+                <span className="text-white/70">ยอดสุทธิ{vatEnabled ? ' (รวม VAT)' : ''}</span>
+                <span className="text-3xl text-white drop-shadow-md">{formatCurrency(grandTotal)}</span>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -134,28 +171,25 @@ useEffect(() => {
                         <input
                             type="number"
                             value={cash}
-                            onChange={(e) => {
-                                const val = Number(e.target.value);
-                                setCash(val >= 0 ? val : 0);
-                            }}
+                            onChange={(e) => handleCashChange(e.target.value)}
                             className="w-full bg-black/20 text-white p-3 rounded-lg border border-white/30 focus:border-white outline-none font-bold text-xl"
                         />
                     </div>
 
                     <div className={`p-3 rounded-lg border border-dashed flex justify-between items-center ${payMode === 'cash'
-                        ? (cash >= netTotal ? "bg-green-600/30 border-green-300" : "bg-red-600/30 border-red-300")
+                        ? (cash >= grandTotal ? "bg-green-600/30 border-green-300" : "bg-red-600/30 border-red-300")
                         : "bg-blue-600/30 border-blue-300"
                         }`}>
                         <span className="text-sm font-bold">
                             {payMode === 'cash'
-                                ? (cash >= netTotal ? "เงินทอน" : "ยังขาดอีก")
+                                ? (cash >= grandTotal ? "เงินทอน" : "ยังขาดอีก")
                                 : "คงเหลือต้องโอน"}
                         </span>
                         <span className="text-2xl font-black">
                             {formatCurrency(
                                 payMode === 'cash'
-                                    ? Math.abs(cash - netTotal)
-                                    : Math.max(0, netTotal - cash)
+                                    ? Math.abs(cash - grandTotal)
+                                    : Math.max(0, grandTotal - cash)
                             )}
                         </span>
                     </div>
@@ -171,8 +205,12 @@ useEffect(() => {
             </div>
 
             <button
-                onClick={() => onSave({ payMode, paymentDetails: { method: payMode, cash: cashToRecord, transfer }, printSize })}
-                disabled={!canSave || isSubmitting || (payMode === 'cash' && cash < netTotal)}
+                onClick={() => onSave({
+                    payMode,
+                    paymentDetails: { method: payMode, cash: cashToRecord, transfer },
+                    printSize
+                })}
+                disabled={!canSave || isSubmitting || (payMode === 'cash' && cash < grandTotal)}
                 className="w-full mt-4 py-5 bg-white text-black rounded-xl font-black text-xl hover:bg-gray-100 transition-all shadow-xl disabled:opacity-50 border-b-4 border-gray-300"
             >
                 {isSubmitting ? 'กำลังบันทึก...' : '💾 บันทึกข้อมูล'}
