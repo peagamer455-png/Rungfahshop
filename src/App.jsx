@@ -41,7 +41,7 @@ const App = () => {
   const [passwordError, setPasswordError] = useState("");
   const [passwordOnSuccess, setPasswordOnSuccess] = useState(null);
   const [currentBillId, setCurrentBillId] = useState(null);
-  const SENSITIVE_PASSWORD = "261250";
+  const SENSITIVE_PASSWORD = "241114";
 
   const loadData = useCallback(async () => {
     try {
