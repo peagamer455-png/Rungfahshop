@@ -17,19 +17,23 @@ const blockKeyboardActivation = (e) => {
     }
 };
 
-const BillItemRow = ({ item, onUpdateQty, onRemove, setPopupContent, setShowPopup }) => {
+const BillItemRow = ({ item, maxQty, onUpdateQty, onRemove, setPopupContent, setShowPopup }) => {
     const stock = item.stock || 0;
     const isOutOfStock = item.qty >= stock;
 
+    // ✅ รองรับทั้ง AddBillView (lastQty) และ EditBillView (reservedQty)
+    // เพราะสอง view นี้ใช้ชื่อ field ต่างกันเก็บค่า "จำนวนล่าสุดที่ถูกต้อง"
+    const fallbackQty = Number(item.lastQty ?? item.reservedQty) || 1;
+
     const handleInputChange = (e) => {
-        const value = e.target.value;
-        if (value === "") {
-            onUpdateQty(item.productId, "", true);
-            return;
+        onUpdateQty(item.productId, e.target.value, true);
+    };
+
+    const handleBlur = () => {
+        // ✅ ออกจากช่องแล้วยังว่าง/ไม่ถูกต้อง -> ดึงกลับเป็นค่าล่าสุดที่ถูกต้อง
+        if (item.qty === "" || item.qty === null || Number(item.qty) <= 0) {
+            onUpdateQty(item.productId, fallbackQty, true);
         }
-        let newQty = parseInt(value, 10);
-        if (isNaN(newQty) || newQty < 0) return;
-        onUpdateQty(item.productId, newQty, true);
     };
 
     const handlePlus = () => {
@@ -51,7 +55,6 @@ const BillItemRow = ({ item, onUpdateQty, onRemove, setPopupContent, setShowPopu
                 <p className="text-xs text-gray-500">@{formatCurrency(item.price)}</p>
             </div>
             <div className="flex items-center space-x-2">
-                {/* เพิ่ม active:scale-95 เพื่อความลื่นไหลของ UI */}
                 <button
                     onClick={onlyMouseClick(handleMinus)}
                     onKeyDown={blockKeyboardActivation}
@@ -59,13 +62,15 @@ const BillItemRow = ({ item, onUpdateQty, onRemove, setPopupContent, setShowPopu
                 >-</button>
                 <input
                     type="number"
+                    min="0"
+                    max={maxQty}
                     value={item.qty}
                     onChange={handleInputChange}
+                    onBlur={handleBlur}
                     className="font-bold text-gray-900 w-12 text-center bg-white border border-gray-300 rounded-md py-1 focus:ring-2 focus:ring-green-400 outline-none"
-                    min="0"
                 />
                 <button
-                    onClick={onlyMouseClick(handlePlus)} // เปลี่ยนมาเรียก handlePlus แทน
+                    onClick={onlyMouseClick(handlePlus)}
                     onKeyDown={blockKeyboardActivation}
                     className="p-1 w-8 h-8 flex items-center justify-center bg-green-400 text-white rounded-full hover:bg-green-500 active:scale-90 transition-transform"
                 >+</button>
