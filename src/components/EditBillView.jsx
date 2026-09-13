@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { formatCurrency, translateBarcode } from "../utils";
-import { calcBillTotals, normalizeItems, toDbItems } from "../utils/billCalc";
+import { calcBillTotals, normalizeItems, toDbItems } from "./billCalc";
 import BillSummary from "./BillSummary";
 import BillItemRow from "./BillItemRow";
 import { Header } from "./SharedUI";
