@@ -30,31 +30,14 @@ const HistoryBillCard = ({ bill, products, loadData, setPopupContent, setShowPop
               actions: [{ label: "กำลังประมวลผล...", variant: "danger" }]
             });
             try {
-              // 1. วนลูปคืนสต็อกใน Supabase
-              // ✅ ใช้ RPC increment_stock แบบเดียวกับที่อื่นในระบบ (atomic ในระดับ DB)
-              //    แทนการอ่านค่า stock ฝั่ง client แล้วเขียนทับ (เสี่ยงชนกันเวลามีหลายเครื่องแก้สต็อกพร้อมกัน)
-              // ✅ อ้างอิงด้วย productId แทนชื่อสินค้า กันกรณีสินค้าถูกเปลี่ยนชื่อภายหลังแล้วคืนสต็อกไม่เข้า
-              if (bill.items && bill.items.length > 0) {
-                for (const item of bill.items) {
-                  const refundQty = Number(item.qty) || 0;
-                  if (refundQty <= 0 || !item.productId) continue;
+              // 🔒 คืนสต็อก + ลบบิล ใน transaction เดียวฝั่ง DB (atomic)
+              // แทนการ loop เรียก increment_stock ทีละตัวแล้วค่อย delete แยก
+              // ซึ่งถ้า error กลางทางจะทำให้สต็อกคืนไม่ครบแต่บิลยังไม่ถูกลบ
+              const { error: rpcErr } = await supabase.rpc('delete_bill_with_stock', {
+                p_bill_id: bill.id,
+              });
+              if (rpcErr) throw rpcErr;
 
-                  const { error: rpcErr } = await supabase.rpc('increment_stock', {
-                    p_id: item.productId,
-                    amount: refundQty,
-                  });
-
-                  if (rpcErr) throw rpcErr;
-                }
-              }
-
-              // 2. ลบบิลออกจากตาราง bills ใน Supabase
-              const { error: deleteErr } = await supabase
-                .from('bills')
-                .delete()
-                .eq('id', bill.id);
-
-              if (deleteErr) throw deleteErr;
               await loadData();
               setPopupContent({
                 title: "✅ ดำเนินการสำเร็จ",
