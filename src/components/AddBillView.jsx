@@ -239,6 +239,7 @@ const AddBillView = ({
       setCustomer("");
       setCustomerDetail("");
       await loadData?.();
+      navigateTo("/");
 
       setPopupContent({
         title: "✅ บันทึกสำเร็จ",
