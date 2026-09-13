@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Header } from "./SharedUI";
 import { formatCurrency, translateBarcode } from "../utils";
-import { calcBillTotals, normalizeItems, toDbItems } from "../utils/billCalc";
+import { calcBillTotals, normalizeItems, toDbItems } from "./billCalc";
 import BillItemRow from "./BillItemRow";
 import BillSummary from "./BillSummary";
 import { supabase } from "../supabaseClient";
