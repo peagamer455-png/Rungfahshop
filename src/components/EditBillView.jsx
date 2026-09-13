@@ -256,6 +256,7 @@ const EditBillView = ({
 
       clearDraft();
       await loadData?.();
+      navigateTo("/");
 
       setPopupContent({
         title: "✅ บันทึกสำเร็จ",
