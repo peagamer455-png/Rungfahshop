@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { formatCurrency, translateBarcode } from "../utils";
-import BillSummary from "./BillSummary";
-import { supabase } from "../supabaseClient";
-import { Header } from "./SharedUI";
-import BillItemRow from "./BillItemRow";
 import { useParams } from "react-router-dom";
+import { formatCurrency, translateBarcode } from "../utils";
+import { calcBillTotals, normalizeItems, toDbItems } from "../utils/billCalc";
+import BillSummary from "./BillSummary";
+import BillItemRow from "./BillItemRow";
+import { Header } from "./SharedUI";
+import { supabase } from "../supabaseClient";
 import { handlePrint } from "./PrintService";
 
 const SCAN_THRESHOLD_MS = 100;
@@ -13,21 +14,16 @@ const EditBillView = ({
   bills = [],
   products = [],
   loadData,
-  putData,
   navigateTo,
   setShowPopup,
   setPopupContent,
   setSidebarOpen,
 }) => {
   const { id } = useParams();
-
-  const billToEdit = useMemo(
-    () => bills.find((b) => String(b.id) === String(id)),
-    [bills, id]
-  );
+  const billToEdit = useMemo(() => bills.find((b) => String(b.id) === String(id)), [bills, id]);
   const draftKey = `draft_edit_${id}`;
 
-  /* ===== hooks ทั้งหมดต้องอยู่บนสุด ห้ามมี early return คั่น ===== */
+  /* ===== hooks ทั้งหมดอยู่บนสุด ห้ามมี early return คั่น ===== */
   const [customer, setCustomer] = useState("");
   const [customerDetail, setCustomerDetail] = useState("");
   const [billItems, setBillItems] = useState([]);
@@ -39,23 +35,14 @@ const EditBillView = ({
 
   const barcodeBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
-  const isProcessingRef = useRef(false);
-  const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
 
   useEffect(() => {
     loadData?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ โหลดค่าเริ่มต้นเมื่อบิลมาถึง + migrate reservedQty ให้บิลเก่า
   useEffect(() => {
     if (!billToEdit || isHydrated) return;
-
     setCustomer(billToEdit.customer || "");
     setCustomerDetail(billToEdit.customer_detail || "");
     setPrintSize(billToEdit.print_size || "receipt");
@@ -66,17 +53,15 @@ const EditBillView = ({
     } catch {
       items = billToEdit.items || [];
     }
-
     setBillItems(
       (Array.isArray(items) ? items : []).map((i) => ({
         ...i,
-        reservedQty: Number(i.reservedQty ?? i.qty) || 0,
+        lastQty: Number(i.lastQty ?? i.qty) || 1,
       }))
     );
     setIsHydrated(true);
   }, [billToEdit, draftKey, isHydrated]);
 
-  // ✅ เขียน draft เฉพาะหลัง hydrate แล้ว กันเขียนทับด้วย array ว่าง
   useEffect(() => {
     if (!isHydrated) return;
     localStorage.setItem(draftKey, JSON.stringify(billItems));
@@ -86,261 +71,119 @@ const EditBillView = ({
 
   useEffect(() => {
     let cancelled = false;
-    const fetchPromotions = async () => {
+    (async () => {
       const { data, error } = await supabase.from("promotions").select("*");
       if (!cancelled && !error) setPromotions(data || []);
-    };
-    fetchPromotions();
+    })();
     return () => { cancelled = true; };
   }, []);
 
-  /* ---------------- คำนวณยอด + โปรโมชั่น ---------------- */
-  const { subTotal, totalsale, discount, activePromos } = useMemo(() => {
-    const subTotal = billItems.reduce(
-      (acc, item) => acc + (Number(item.price) || 0) * (Number(item.qty) || 0),
-      0
-    );
-    let discount = 0;
-    const activePromos = [];
+  const { subTotal, totalsale, discount, activePromos } = useMemo(
+    () => calcBillTotals(billItems, promotions),
+    [billItems, promotions]
+  );
 
-    (promotions || []).forEach((promo) => {
-      if (!promo || !Array.isArray(promo.items) || promo.items.length === 0) return;
-      const promoPrice = Number(promo.discount_price) || 0;
-
-      if (promo.type === "qty") {
-        const minQty = Number(promo.min_qty) || 0;
-        if (minQty <= 0) return;
-
-        const itemInCart = billItems.find((i) => i.productId === promo.items[0]?.id);
-        const cartQty = Number(itemInCart?.qty) || 0;
-        if (!itemInCart || cartQty < minQty) return;
-
-        const sets = Math.floor(cartQty / minQty);
-        const discountPerSet = (Number(itemInCart.price) || 0) * minQty - promoPrice;
-        if (sets > 0 && discountPerSet > 0) {
-          discount += sets * discountPerSet;
-          activePromos.push(`${promo.name} (${sets} ชุด)`);
-        }
-      } else if (promo.type === "bundle") {
-        const possibleSets = promo.items.map((pItem) => {
-          const bItem = billItems.find((b) => b.productId === pItem?.id);
-          const requiredQty = Number(pItem?.qty) > 0 ? Number(pItem.qty) : 1;
-          return bItem ? Math.floor((Number(bItem.qty) || 0) / requiredQty) : 0;
-        });
-
-        const maxSets = Math.min(...possibleSets);
-        if (!Number.isFinite(maxSets) || maxSets <= 0) return;
-
-        const bundleNormalPrice = promo.items.reduce((acc, pItem) => {
-          const item = billItems.find((b) => b.productId === pItem?.id);
-          const requiredQty = Number(pItem?.qty) > 0 ? Number(pItem.qty) : 1;
-          return acc + (item ? (Number(item.price) || 0) * requiredQty : 0);
-        }, 0);
-
-        const discountPerSet = bundleNormalPrice - promoPrice;
-        if (discountPerSet > 0) {
-          discount += maxSets * discountPerSet;
-          activePromos.push(`${promo.name} (${maxSets} ชุด)`);
-        }
-      }
+  // ✅ จำนวนเดิมของบิลนี้ที่ "ถูกตัดสต็อกไปแล้ว" ใน DB
+  const originalQtyMap = useMemo(() => {
+    const map = {};
+    (billToEdit?.items || []).forEach((i) => {
+      map[i.productId] = (map[i.productId] || 0) + (Number(i.qty) || 0);
     });
+    return map;
+  }, [billToEdit]);
 
-    discount = Math.max(0, Math.min(discount, subTotal));
-    return { subTotal, totalsale: subTotal - discount, discount, activePromos };
-  }, [billItems, promotions]);
+  // available = stock ใน DB + จำนวนที่บิลนี้จองไว้เดิม
+  const getAvailableStock = useCallback(
+    (productId) => {
+      const dbStock = Number(products.find((p) => p.id === productId)?.stock) || 0;
+      return dbStock + (originalQtyMap[productId] || 0);
+    },
+    [products, originalQtyMap]
+  );
 
-  /* ---------------- จัดการจำนวน / สต็อก ---------------- */
-  const updateItemQty = async (productId, delta, isSet = false) => {
-    const item = billItems.find((i) => i.productId === productId);
-    if (!item) return;
+  const warnStock = (available) => {
+    setPopupContent({
+      title: "⚠️ สินค้าไม่เพียงพอ",
+      message: `ขออภัยครับ สินค้านี้มีสต็อกทั้งหมด ${available} ชิ้นเท่านั้น`,
+      color: "red",
+    });
+    setShowPopup(true);
+  };
 
-    const reserved = Number(item.reservedQty ?? item.qty) || 0;
+  /* ---------- local ล้วน ไม่แตะ DB ---------- */
+  const updateItemQty = (productId, delta, isSet = false) => {
+    setBillItems((prev) => {
+      const item = prev.find((i) => i.productId === productId);
+      if (!item) return prev;
 
-    if (isSet && (delta === "" || delta === null || Number.isNaN(Number(delta)))) {
-      setBillItems((prev) =>
-        prev.map((i) => (i.productId === productId ? { ...i, qty: "" } : i))
-      );
-      return;
-    }
+      const base = Number(item.qty);
+      const safeBase = Number.isFinite(base) && base > 0 ? base : Number(item.lastQty) || 0;
 
-    let newQty = isSet ? Math.floor(Number(delta)) : reserved + Number(delta);
-    if (!Number.isFinite(newQty) || newQty < 0) newQty = 0;
-
-    const qtyDiff = newQty - reserved;
-    if (qtyDiff === 0) {
-      setBillItems((prev) =>
-        prev.map((i) =>
-          i.productId === productId ? { ...i, qty: newQty, reservedQty: newQty } : i
-        )
-      );
-      return;
-    }
-
-    if (isProcessingRef.current) return;
-    isProcessingRef.current = true;
-
-    try {
-      // ✅ ดึง stock สดจาก DB แทนการเชื่อ products props (ของเดิมใช้ข้อมูลค้าง)
-      const { data: freshProduct, error: fetchErr } = await supabase
-        .from("products")
-        .select("stock")
-        .eq("id", productId)
-        .single();
-
-      if (fetchErr) throw fetchErr;
-
-      const currentStock = Number(freshProduct?.stock) || 0;
-      const availableStock = currentStock + reserved;
-
-      if (newQty > availableStock) {
-        setBillItems((prev) =>
-          prev.map((i) =>
-            i.productId === productId ? { ...i, qty: reserved, reservedQty: reserved } : i
-          )
+      if (isSet && (delta === "" || delta === null || Number.isNaN(Number(delta)))) {
+        return prev.map((i) =>
+          i.productId === productId ? { ...i, qty: "", lastQty: safeBase || 1 } : i
         );
-        setPopupContent({
-          title: "⚠️ สินค้าไม่เพียงพอ",
-          message: `ขออภัยครับ สินค้านี้มีสต็อกทั้งหมด ${availableStock} ชิ้นเท่านั้น`,
-          color: "red",
-        });
-        setShowPopup(true);
-        return;
       }
 
-      setBillItems((prev) =>
-        prev.map((i) =>
-          i.productId === productId ? { ...i, qty: newQty, reservedQty: newQty } : i
-        )
-      );
+      let newQty = isSet ? Math.floor(Number(delta)) : safeBase + Number(delta);
+      if (!Number.isFinite(newQty) || newQty < 0) newQty = 0;
 
-      const { error } = await supabase.rpc(
-        qtyDiff > 0 ? "decrement_stock" : "increment_stock",
-        { p_id: Number(productId), amount: Math.abs(qtyDiff) }
-      );
-      if (error) throw error;
+      const available = getAvailableStock(productId);
+      if (newQty > available) {
+        warnStock(available);
+        return prev.map((i) =>
+          i.productId === productId ? { ...i, qty: available, lastQty: available } : i
+        );
+      }
 
-      await loadData?.();
-    } catch (err) {
-      if (!isMountedRef.current) return;
-      setBillItems((prev) =>
-        prev.map((i) =>
-          i.productId === productId ? { ...i, qty: reserved, reservedQty: reserved } : i
-        )
+      return prev.map((i) =>
+        i.productId === productId
+          ? { ...i, qty: newQty, lastQty: newQty > 0 ? newQty : i.lastQty }
+          : i
       );
-      setPopupContent({
-        title: "⚠️ ผิดพลาด",
-        message: "ไม่สามารถอัปเดตสต็อกได้: " + (err?.message || "กรุณาลองใหม่อีกครั้ง"),
-        color: "red",
-      });
-      setShowPopup(true);
-      await loadData?.();
-    } finally {
-      isProcessingRef.current = false;
-    }
+    });
   };
 
-  const addItemToBill = async (product) => {
+  const addItemToBill = (product) => {
     if (!product) return;
-
-    const existingItem = billItems.find((i) => i.productId === product.id);
-    if (existingItem) {
-      await updateItemQty(product.id, 1);
+    if (billItems.some((i) => i.productId === product.id)) {
+      updateItemQty(product.id, 1);
       setSearchTerm("");
       return;
     }
 
-    if (isProcessingRef.current) return;
-    isProcessingRef.current = true;
-
-    const newItem = {
-      productId: product.id,
-      name: product.name,
-      price: Number(product.price) || 0,
-      cost: Number(product.cost) || 0,
-      unit: product.unit || "ชิ้น",
-      qty: 1,
-      reservedQty: 1,
-      tempId: `${product.id}-${Date.now()}`,
-    };
-
-    try {
-      const { data: freshProduct, error: fetchErr } = await supabase
-        .from("products")
-        .select("stock")
-        .eq("id", product.id)
-        .single();
-
-      if (fetchErr) throw fetchErr;
-
-      if ((Number(freshProduct?.stock) || 0) <= 0) {
-        setPopupContent({
-          title: "❌ สินค้าหมด",
-          message: "สินค้านี้สต็อกหมดแล้วครับ ไม่สามารถเพิ่มลงบิลได้",
-          color: "red",
-        });
-        setShowPopup(true);
-        return;
-      }
-
-      setBillItems((prev) => [...prev, newItem]);
-      setSearchTerm("");
-
-      const { error } = await supabase.rpc("decrement_stock", {
-        p_id: Number(product.id),
-        amount: 1,
-      });
-      if (error) throw error;
-
-      await loadData?.();
-    } catch (err) {
-      if (!isMountedRef.current) return;
-      setBillItems((prev) => prev.filter((i) => i.tempId !== newItem.tempId));
+    const available = getAvailableStock(product.id);
+    if (available <= 0) {
       setPopupContent({
-        title: "⚠️ เพิ่มสินค้าไม่สำเร็จ",
-        message: "จำนวนสินค้าในสต็อกเหลือไม่พอ หรือเกิดข้อผิดพลาด: " + (err?.message || ""),
+        title: "❌ สินค้าหมด",
+        message: "สินค้านี้สต็อกหมดแล้วครับ ไม่สามารถเพิ่มลงบิลได้",
         color: "red",
       });
       setShowPopup(true);
-      await loadData?.();
-    } finally {
-      isProcessingRef.current = false;
+      return;
     }
+
+    setBillItems((prev) => [
+      ...prev,
+      {
+        productId: product.id,
+        name: product.name,
+        price: Number(product.price) || 0,
+        cost: Number(product.cost) || 0,
+        unit: product.unit || "ชิ้น",
+        qty: 1,
+        lastQty: 1,
+        tempId: `${product.id}-${Date.now()}`,
+      },
+    ]);
+    setSearchTerm("");
   };
 
-  const removeItem = async (productId) => {
-    const originalIndex = billItems.findIndex((i) => i.productId === productId);
-    if (originalIndex === -1) return;
-    const itemToRemove = billItems[originalIndex];
-
-    const amountToReturn = Number(itemToRemove.reservedQty ?? itemToRemove.qty) || 0;
-
+  const removeItem = (productId) => {
     setBillItems((prev) => prev.filter((i) => i.productId !== productId));
-    if (amountToReturn <= 0) return;
-
-    try {
-      const { error } = await supabase.rpc("increment_stock", {
-        p_id: Number(productId),
-        amount: amountToReturn,
-      });
-      if (error) throw error;
-      await loadData?.();
-    } catch (error) {
-      if (!isMountedRef.current) return;
-      setBillItems((prev) => {
-        const next = [...prev];
-        next.splice(originalIndex, 0, itemToRemove);
-        return next;
-      });
-      setPopupContent({
-        title: "🚫 เกิดข้อผิดพลาด",
-        message: "ไม่สามารถคืนสต็อกได้: " + error.message,
-        color: "red",
-      });
-      setShowPopup(true);
-    }
   };
 
-  /* ---------------- บันทึกบิล ---------------- */
+  /* ---------------- บันทึก ---------------- */
   const handleSaveBill = async (options = {}) => {
     if (isSubmitting || !billToEdit) return;
 
@@ -354,18 +197,12 @@ const EditBillView = ({
       return;
     }
 
-    const normalizedItems = billItems.map((item) => {
-      const qty = Number(item.qty);
-      const fallback = Number(item.reservedQty) || 0;
-      return { ...item, qty: Number.isFinite(qty) && qty > 0 ? qty : fallback };
-    });
-
-    const hasInvalidItem = normalizedItems.some((item) => !item.qty || item.qty <= 0);
-    if (hasInvalidItem) {
-      setBillItems(normalizedItems);
+    const normalized = normalizeItems(billItems);
+    if (normalized.some((i) => !i.qty || i.qty <= 0)) {
+      setBillItems(normalized);
       setPopupContent({
         title: "❌ ข้อมูลไม่ครบ",
-        message: "มีสินค้าบางรายการจำนวนเป็น 0 หรือยังไม่ได้ระบุจำนวน กรุณาตรวจสอบให้ครบถ้วนครับ",
+        message: "มีสินค้าบางรายการจำนวนเป็น 0 กรุณาตรวจสอบให้ครบถ้วนครับ",
         color: "red",
       });
       setShowPopup(true);
@@ -383,32 +220,40 @@ const EditBillView = ({
     setShowPopup(true);
 
     try {
-      const cleanItems = normalizedItems.map(({ reservedQty, tempId, stock, ...rest }) => rest);
+      const dbItems = toDbItems(normalized);
+      const totals = calcBillTotals(dbItems, promotions);
 
-      const totalAmount = cleanItems.reduce((acc, i) => acc + i.price * i.qty, 0);
-      const totalcost = cleanItems.reduce((acc, i) => acc + (Number(i.cost) || 0) * i.qty, 0);
-      const netBeforeVat = totalAmount - discount;
+      const totalAmount = totals.subTotal;
+      const totalcost = dbItems.reduce((a, i) => a + (Number(i.cost) || 0) * i.qty, 0);
+      const netBeforeVat = totalAmount - totals.discount;
       const total_net = options.vat?.enabled ? options.vat.totalWithVat : netBeforeVat;
-      const profit = total_net - totalcost;
 
-      const finalBill = {
-        ...billToEdit,
+      const billPayload = {
+        date: billToEdit.date,
         customer,
         customer_detail: customerDetail,
-        items: cleanItems,
         totalsale: netBeforeVat,
         total_amount: totalAmount,
         totalcost,
-        discount,
+        discount: totals.discount,
         total_net,
-        profit,
+        profit: total_net - totalcost,
         status: "completed",
-        payment_details: options.paymentDetails ?? billToEdit.payment_details,
+        payment_details: options.paymentDetails ?? billToEdit.payment_details ?? null,
         print_size: options.printSize || printSize,
-        activePromos,
+        activePromos: totals.activePromos,
       };
 
-      await putData("bills", finalBill);
+      // 🔒 คำนวณผลต่างสต็อก + อัปเดตบิล ใน transaction เดียว
+      const { data: savedId, error } = await supabase.rpc("save_bill_with_stock", {
+        p_bill_id: Number(billToEdit.id),
+        p_bill: billPayload,
+        p_items: dbItems,
+      });
+      if (error) throw error;
+
+      const finalBill = { ...billToEdit, ...billPayload, items: dbItems, id: savedId };
+
       clearDraft();
       await loadData?.();
 
@@ -421,25 +266,16 @@ const EditBillView = ({
           {
             label: "🖨️ พิมพ์บิลทันที",
             variant: "success",
-            handler: () => {
-              handlePrint(finalBill);
-              setShowPopup(false);
-              navigateTo("/");
-            },
+            handler: () => { handlePrint(finalBill); setShowPopup(false); navigateTo("/"); },
           },
-          {
-            label: "ปิดหน้าต่าง",
-            handler: () => {
-              setShowPopup(false);
-              navigateTo("/");
-            },
-          },
+          { label: "ปิดหน้าต่าง", handler: () => { setShowPopup(false); navigateTo("/"); } },
         ],
       });
     } catch (e) {
+      await loadData?.();
       setPopupContent({
         title: "🚫 บันทึกข้อมูลไม่สำเร็จ",
-        message: "พบปัญหาขณะบันทึกบิล: " + e.message,
+        message: e.message || "พบปัญหาขณะบันทึกบิล",
         isLoading: false,
         color: "red",
         actions: [{ label: "ปิด", handler: () => setShowPopup(false) }],
@@ -449,46 +285,41 @@ const EditBillView = ({
     }
   };
 
-  /* ---------------- ค้นหา ---------------- */
+  /* ---------------- ค้นหา / บาร์โค้ด ---------------- */
   const searchResults = useMemo(() => {
     const term = searchTerm.trim();
     if (!term) return [];
-    const normalizedSearch = term.toLowerCase().replace(/\s+/g, "");
-
+    const q = term.toLowerCase().replace(/\s+/g, "");
     return products
-      .filter((p) => {
-        if (!p?.name) return false;
-        const normalizedName = p.name.toLowerCase().replace(/\s+/g, "");
-        const isMatch = normalizedName.includes(normalizedSearch);
-        const isNotInBill = !billItems.some((i) => i.productId === p.id);
-        return isMatch && isNotInBill;
-      })
+      .filter(
+        (p) =>
+          p?.name &&
+          p.name.toLowerCase().replace(/\s+/g, "").includes(q) &&
+          !billItems.some((i) => i.productId === p.id)
+      )
       .sort((a, b) => a.name.localeCompare(b.name, "th", { sensitivity: "base" }))
       .slice(0, 50);
   }, [searchTerm, products, billItems]);
 
-  /* ---------------- บาร์โค้ด ---------------- */
   const handleBarcodeScan = useCallback(
     (code) => {
       const raw = String(code).trim();
       const translated = String(translateBarcode(code)).trim();
 
-      let foundProduct = products.find((p) => {
+      let found = products.find((p) => {
         if (!p.barcode) return false;
-        const pBarcode = String(p.barcode).trim();
-        return pBarcode === raw || pBarcode === translated;
+        const b = String(p.barcode).trim();
+        return b === raw || b === translated;
       });
-
-      if (!foundProduct) {
-        foundProduct = products.find((p) => {
-          const pId = String(p.id).trim();
-          return pId === translated || pId === raw;
+      if (!found) {
+        found = products.find((p) => {
+          const pid = String(p.id).trim();
+          return pid === translated || pid === raw;
         });
       }
 
-      if (foundProduct) {
-        addItemToBill(foundProduct);
-      } else {
+      if (found) addItemToBill(found);
+      else {
         setPopupContent({
           title: "🔍 ไม่พบสินค้า",
           message: `ไม่พบสินค้าที่มีบาร์โค้ด/รหัส: ${code}`,
@@ -501,38 +332,33 @@ const EditBillView = ({
     [products, billItems]
   );
 
-  const handleBarcodeScanRef = useRef(handleBarcodeScan);
-  useEffect(() => {
-    handleBarcodeScanRef.current = handleBarcodeScan;
-  }, [handleBarcodeScan]);
+  const scanRef = useRef(handleBarcodeScan);
+  useEffect(() => { scanRef.current = handleBarcodeScan; }, [handleBarcodeScan]);
 
   useEffect(() => {
-    const handleScanner = (e) => {
+    const onKey = (e) => {
       const tag = e.target?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable) return;
 
-      const currentTime = Date.now();
-      const timeDiff = currentTime - lastKeyTimeRef.current;
+      const now = Date.now();
+      const diff = now - lastKeyTimeRef.current;
 
       if (e.key === "Enter") {
         if (barcodeBufferRef.current.length >= 1) {
           e.preventDefault();
-          handleBarcodeScanRef.current(barcodeBufferRef.current);
+          scanRef.current(barcodeBufferRef.current);
           barcodeBufferRef.current = "";
         }
         lastKeyTimeRef.current = 0;
         return;
       }
-
       if (e.key.length !== 1 || e.ctrlKey || e.altKey || e.metaKey) return;
 
-      barcodeBufferRef.current =
-        timeDiff < SCAN_THRESHOLD_MS ? barcodeBufferRef.current + e.key : e.key;
-      lastKeyTimeRef.current = currentTime;
+      barcodeBufferRef.current = diff < SCAN_THRESHOLD_MS ? barcodeBufferRef.current + e.key : e.key;
+      lastKeyTimeRef.current = now;
     };
-
-    window.addEventListener("keydown", handleScanner);
-    return () => window.removeEventListener("keydown", handleScanner);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   /* ===== เช็คหลัง hooks ครบแล้วเท่านั้น ===== */
@@ -553,12 +379,11 @@ const EditBillView = ({
   const billLabel =
     billToEdit.bill_number || billToEdit.billNumber || String(billToEdit.id).substring(0, 5);
 
-  /* ---------------- UI ---------------- */
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-screen">
       <Header
         title={`✏️ แก้ไขบิล #${billLabel}`}
-        onToggleSidebar={setSidebarOpen ? () => setSidebarOpen((prev) => !prev) : undefined}
+        onToggleSidebar={setSidebarOpen ? () => setSidebarOpen((p) => !p) : undefined}
       />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         <div className="lg:col-span-2 space-y-4">
@@ -578,7 +403,6 @@ const EditBillView = ({
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500"
               rows="2"
             />
-
             <h3 className="text-lg font-bold text-yellow-700 pt-4">🔍 ค้นหาสินค้าเพื่อแก้ไขในบิล</h3>
             <input
               type="text"
@@ -586,46 +410,36 @@ const EditBillView = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && searchTerm.trim().length > 0) {
+                if (e.key === "Enter" && searchTerm.trim()) {
                   e.preventDefault();
-                  handleBarcodeScanRef.current(searchTerm.trim());
+                  scanRef.current(searchTerm.trim());
                   setSearchTerm("");
                 }
               }}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500"
             />
-
             {searchTerm && searchResults.length === 0 && (
               <p className="text-sm text-gray-400 px-1">ไม่พบสินค้าที่ตรงกับคำค้นหา</p>
             )}
-
             {searchTerm && searchResults.length > 0 && (
               <div className="bg-white border border-yellow-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                 {searchResults.map((p) => {
-                  const isOutOfStock = (Number(p.stock) || 0) <= 0;
+                  const out = (Number(p.stock) || 0) <= 0;
                   return (
                     <div
                       key={p.id}
-                      onClick={() => !isOutOfStock && addItemToBill(p)}
-                      className={`flex justify-between items-center p-3 transition duration-100 border-b last:border-b-0 ${
-                        isOutOfStock
-                          ? "opacity-50 cursor-not-allowed bg-gray-100"
-                          : "cursor-pointer hover:bg-yellow-100"
+                      onClick={() => !out && addItemToBill(p)}
+                      className={`flex justify-between items-center p-3 border-b last:border-b-0 ${
+                        out ? "opacity-50 cursor-not-allowed bg-gray-100" : "cursor-pointer hover:bg-yellow-100"
                       }`}
                     >
                       <div className="flex flex-col">
                         <span className="font-medium text-gray-800">{p.name}</span>
-                        <span
-                          className={`text-sm font-semibold ${
-                            isOutOfStock || p.stock < 5 ? "text-red-500" : "text-blue-600"
-                          }`}
-                        >
-                          {isOutOfStock ? "สินค้าหมด" : `คงเหลือ: ${p.stock} ${p.unit || "ชิ้น"}`}
+                        <span className={`text-sm font-semibold ${out || p.stock < 5 ? "text-red-500" : "text-blue-600"}`}>
+                          {out ? "สินค้าหมด" : `คงเหลือ: ${p.stock} ${p.unit || "ชิ้น"}`}
                         </span>
                       </div>
-                      <span className="text-sm font-semibold text-yellow-600">
-                        {formatCurrency(p.price)}
-                      </span>
+                      <span className="text-sm font-semibold text-yellow-600">{formatCurrency(p.price)}</span>
                     </div>
                   );
                 })}
@@ -645,6 +459,7 @@ const EditBillView = ({
                   <BillItemRow
                     key={item.tempId || `edit-${item.productId}`}
                     item={item}
+                    maxQty={getAvailableStock(item.productId)}
                     onUpdateQty={updateItemQty}
                     onRemove={removeItem}
                     setPopupContent={setPopupContent}
