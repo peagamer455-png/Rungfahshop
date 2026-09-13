@@ -13,6 +13,7 @@ const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPo
   const [clearPassword, setClearPassword] = useState('');
   const [clearError, setClearError] = useState('');
   const [clearPasswordVisible, setClearPasswordVisible] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   const itemsPerPage = 15;
   const SENSITIVE_PASSWORD = '261250'; // รหัสผ่านสำหรับลบประวัติ
@@ -60,27 +61,61 @@ const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPo
       setClearError('รหัสไม่ถูกต้อง กรุณาลองใหม่');
       return;
     }
+    setIsClearing(true);
+    setPopupContent({
+      title: "⏳ กำลังดำเนินการ...",
+      message: "ระบบกำลังคืนสต็อกและลบข้อมูลบิลทีละรายการ กรุณารอสักครู่ครับ",
+      isLoading: true,
+      color: "red",
+      actions: [{ label: "กำลังประมวลผล...", variant: "danger" }]
+    });
+    setShowClearConfirm(false);
+    setShowPopup(true);
+
     try {
       const idsToDelete = filteredBills.map(b => b.id);
-      const { error } = await supabase.from('bills').delete().in('id', idsToDelete);
-      if (error) throw error;
+      let successCount = 0;
+      const failedIds = [];
+
+      // 🔒 ลบทีละบิลผ่าน delete_bill_with_stock เพื่อให้คืนสต็อกครบทุกบิล
+      // (ทำทีละตัวแทนการลบทีเดียวทั้งก้อน เพราะแต่ละบิลต้องคืนสต็อกเป็น transaction ของตัวเอง)
+      for (const id of idsToDelete) {
+        const { error } = await supabase.rpc('delete_bill_with_stock', { p_bill_id: id });
+        if (error) {
+          failedIds.push(id);
+        } else {
+          successCount++;
+        }
+      }
 
       await loadData();
-      setShowClearConfirm(false);
       setClearPassword('');
-      setPopupContent({
-        title: "✅ ดำเนินการสำเร็จ",
-        message: `ระบบได้ลบข้อมูลบิลจำนวน ${idsToDelete.length} รายการเรียบร้อยแล้วครับ`,
-        color: "green"
-      });
-      setShowPopup(true);
+
+      if (failedIds.length === 0) {
+        setPopupContent({
+          title: "✅ ดำเนินการสำเร็จ",
+          message: `ระบบได้คืนสต็อกและลบข้อมูลบิลจำนวน ${successCount} รายการเรียบร้อยแล้วครับ`,
+          isLoading: false,
+          color: "green"
+        });
+      } else {
+        setPopupContent({
+          title: "⚠️ ดำเนินการสำเร็จบางส่วน",
+          message: `ลบสำเร็จ ${successCount} รายการ แต่ล้มเหลว ${failedIds.length} รายการ (บิล #${failedIds.join(', #')}) กรุณาลองใหม่เฉพาะรายการที่ล้มเหลว`,
+          isLoading: false,
+          color: "red"
+        });
+      }
     } catch (error) {
+      await loadData();
       setPopupContent({
         title: "⚠️ ขออภัย พบข้อผิดพลาด",
         message: `ไม่สามารถดำเนินการได้: ${error.message} โปรดตรวจสอบการเชื่อมต่อหรือติดต่อผู้ดูแลระบบครับ`,
+        isLoading: false,
         color: "red"
       });
-      setShowPopup(true);
+    } finally {
+      setIsClearing(false);
     }
   };
 
@@ -143,6 +178,9 @@ const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPo
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-6 rounded-xl w-full max-w-sm">
             <h3 className="text-lg font-bold mb-4">ยืนยันการเคลียร์ประวัติ</h3>
+            <p className="text-sm text-gray-500 mb-3">
+              ระบบจะคืนสินค้าเข้าสต็อกให้อัตโนมัติสำหรับบิลทั้ง {filteredBills.length} รายการที่ตรงกับตัวกรองปัจจุบัน
+            </p>
             <input
               type={clearPasswordVisible ? "text" : "password"}
               value={clearPassword} onChange={(e) => setClearPassword(e.target.value)}
@@ -150,8 +188,10 @@ const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPo
             />
             {clearError && <p className="text-red-500 text-sm mb-2">{clearError}</p>}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowClearConfirm(false)} className="px-4 py-2 bg-gray-200 rounded">ยกเลิก</button>
-              <button onClick={handleClearHistory} className="px-4 py-2 bg-red-500 text-white rounded">ลบรายการ</button>
+              <button onClick={() => setShowClearConfirm(false)} className="px-4 py-2 bg-gray-200 rounded" disabled={isClearing}>ยกเลิก</button>
+              <button onClick={handleClearHistory} className="px-4 py-2 bg-red-500 text-white rounded disabled:opacity-50" disabled={isClearing}>
+                {isClearing ? "กำลังลบ..." : "ลบรายการ"}
+              </button>
             </div>
           </div>
         </div>
