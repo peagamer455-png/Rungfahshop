@@ -256,7 +256,7 @@ const EditBillView = ({
 
       clearDraft();
       await loadData?.();
-      navigateTo("/");
+      navigateTo("/"); // ✅ เด้งไปหน้า POS ทันทีหลังบันทึกสำเร็จ (ป๊อปอัพยังคงแสดงอยู่เพราะ render นอก Routes)
 
       setPopupContent({
         title: "✅ บันทึกสำเร็จ",
@@ -267,7 +267,16 @@ const EditBillView = ({
           {
             label: "🖨️ พิมพ์บิลทันที",
             variant: "success",
-            handler: () => { handlePrint(finalBill); setShowPopup(false); navigateTo("/"); },
+            handler: () => {
+              try {
+                handlePrint(finalBill);
+              } catch (err) {
+                console.error("พิมพ์บิลไม่สำเร็จ:", err);
+              } finally {
+                setShowPopup(false);
+                navigateTo("/");
+              }
+            },
           },
           { label: "ปิดหน้าต่าง", handler: () => { setShowPopup(false); navigateTo("/"); } },
         ],
@@ -425,7 +434,8 @@ const EditBillView = ({
             {searchTerm && searchResults.length > 0 && (
               <div className="bg-white border border-yellow-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                 {searchResults.map((p) => {
-                  const out = (Number(p.stock) || 0) <= 0;
+                  const available = getAvailableStock(p.id); // ✅ นับรวมจำนวนที่บิลนี้จองไว้เดิมด้วย
+                  const out = available <= 0;
                   return (
                     <div
                       key={p.id}
@@ -436,8 +446,8 @@ const EditBillView = ({
                     >
                       <div className="flex flex-col">
                         <span className="font-medium text-gray-800">{p.name}</span>
-                        <span className={`text-sm font-semibold ${out || p.stock < 5 ? "text-red-500" : "text-blue-600"}`}>
-                          {out ? "สินค้าหมด" : `คงเหลือ: ${p.stock} ${p.unit || "ชิ้น"}`}
+                        <span className={`text-sm font-semibold ${out || available < 5 ? "text-red-500" : "text-blue-600"}`}>
+                          {out ? "สินค้าหมด" : `คงเหลือ: ${available} ${p.unit || "ชิ้น"}`}
                         </span>
                       </div>
                       <span className="text-sm font-semibold text-yellow-600">{formatCurrency(p.price)}</span>
