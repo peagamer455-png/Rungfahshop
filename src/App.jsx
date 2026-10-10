@@ -102,24 +102,12 @@ const App = () => {
     if (session) loadData();
   }, [loadData, session]);
 
-  useEffect(() => {
-    if (!session) return;
-    const channel = supabase
-      .channel('bills-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bills' },
-        () => {
-          loadData();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [loadData, session]);
-
+  // 🔎 รวมเหลือ channel เดียว (เดิมมี bills-realtime ซ้ำกับ db-realtime ทำให้ loadData()
+  // ถูกเรียกซ้ำ 2 รอบทุกครั้งที่บิลเปลี่ยน) + ใส่ console.log ไว้ช่วย debug ปัญหา
+  // สต็อกไม่ sync ข้ามเครื่อง: เปิด DevTools > Console ที่เครื่อง B ไว้ แล้วให้เครื่อง A
+  // แก้สต็อก ถ้าไม่เห็น "[realtime] products changed" ขึ้นมาเลย แปลว่า event ไม่ถึง
+  // เครื่อง B จริงๆ (ปัญหาอยู่ที่การเชื่อมต่อ/Supabase ไม่ใช่โค้ดหน้าตา), แต่ถ้าเห็น log
+  // ขึ้นมาแล้วตัวเลขบนหน้าจอยังไม่เปลี่ยน แปลว่าปัญหาอยู่ที่ re-render แทน
   useEffect(() => {
     if (!session) return;
     const channel = supabase
@@ -127,19 +115,31 @@ const App = () => {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bills' },
-        () => loadData()
+        (payload) => {
+          console.log('[realtime] bills changed:', payload.eventType, payload);
+          loadData();
+        }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'products' },
-        () => loadData()
+        (payload) => {
+          console.log('[realtime] products changed:', payload.eventType, payload);
+          loadData();
+        }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'promotions' },
-        () => loadData()
+        (payload) => {
+          console.log('[realtime] promotions changed:', payload.eventType, payload);
+          loadData();
+        }
       )
-      .subscribe();
+      .subscribe((status, err) => {
+        // ควรเห็น status เป็น "SUBSCRIBED" ถ้าเชื่อมต่อสำเร็จ
+        console.log('[realtime] subscription status:', status, err || '');
+      });
 
     return () => {
       supabase.removeChannel(channel);
