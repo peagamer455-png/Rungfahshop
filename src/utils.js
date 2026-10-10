@@ -1,4 +1,5 @@
 // src/utils.js
+import { supabase } from './supabaseClient';
 
 // ฟังก์ชันจัดรูปแบบเงิน (เช่น 1,250.00 ฿)
 export const formatCurrency = (amount) => {
@@ -101,16 +102,16 @@ export const displayMaybeMasked = (val, isCost) => {
   return val.toLocaleString('th-TH', { minimumFractionDigits: 2 });
 };
 
-export const revertStock = async (supabase, billItems) => {
+export const revertStock = async (supabaseClient, billItems) => {
     for (const item of billItems) {
-        const { data: product } = await supabase
+        const { data: product } = await supabaseClient
             .from('products')
             .select('stock')
             .eq('id', item.productId)
             .single();
 
         if (product) {
-            await supabase
+            await supabaseClient
                 .from('products')
                 .update({ stock: product.stock + item.qty })
                 .eq('id', item.productId);
