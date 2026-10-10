@@ -19,6 +19,7 @@ import Login from "./components/Login";
 
 const App = () => {
   const { session, loading: authLoading } = useAuth();
+  const userId = session?.user?.id; // ใช้ userId แทน session เพราะ object session เปลี่ยนทุกครั้งที่ token refresh
 
   const [products, setProducts] = useState([]);
   const [bills, setBills] = useState([]);
@@ -28,7 +29,7 @@ const App = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const handleNavigate = (path) => {
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
     navigate(cleanPath);
   };
 
@@ -41,110 +42,126 @@ const App = () => {
   const [passwordError, setPasswordError] = useState("");
   const [passwordOnSuccess, setPasswordOnSuccess] = useState(null);
   const [currentBillId, setCurrentBillId] = useState(null);
-  const SENSITIVE_PASSWORD = "241114";
+  const SENSITIVE_PASSWORD = "******"; // ⚠️ ใส่รหัสจริงกลับเข้าไป
 
-  const loadData = useCallback(async () => {
+  // ใช้นับรอบการโหลด ถ้ามีหลายรอบซ้อนกัน จะใช้ผลของรอบล่าสุดเท่านั้น
+  const loadSeqRef = useRef(0);
+
+  // silent = true: ถ้าโหลดพลาดจะไม่เด้ง popup (ใช้ตอนโหลดเบื้องหลัง)
+  const loadData = useCallback(async ({ silent = false } = {}) => {
+    const seq = ++loadSeqRef.current;
     try {
-      const { data: productsData, error: pErr } = await supabase
-        .from("products")
-        .select("*");
-      if (pErr) throw pErr;
-
       const threeMonthsAgo = new Date();
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-      const { data: billsData, error: bErr } = await supabase
-        .from("bills")
-        .select("*")
-        .gte("date", threeMonthsAgo.toISOString())
-        .order("date", { ascending: false });
+      // โหลด 3 ตารางพร้อมกัน จะเร็วกว่าโหลดทีละตาราง
+      const [pRes, bRes, promoRes] = await Promise.all([
+        supabase.from("products").select("*"),
+        supabase
+          .from("bills")
+          .select("*")
+          .gte("date", threeMonthsAgo.toISOString())
+          .order("date", { ascending: false }),
+        supabase.from("promotions").select("*"),
+      ]);
 
-      if (bErr) throw bErr;
+      if (pRes.error) throw pRes.error;
+      if (bRes.error) throw bRes.error;
+      if (promoRes.error) throw promoRes.error;
 
-      const { data: promotionsData, error: promoErr } = await supabase
-        .from("promotions")
-        .select("*");
-      if (promoErr) throw promoErr;
+      // ถ้ามีรอบใหม่กว่าเริ่มไปแล้ว ไม่ต้องเอาผลรอบนี้ไปทับ
+      if (seq !== loadSeqRef.current) return;
 
-      setProducts(productsData || []);
-      setBills(billsData || []);
-      setPromotions(promotionsData || []);
-      setIsDbReady(true);
+      setProducts(pRes.data || []);
+      setBills(bRes.data || []);
+      setPromotions(promoRes.data || []);
     } catch (e) {
       console.error("Supabase load failed:", e);
-      setPopupContent({
-        title: "🚫 พบปัญหาการเชื่อมต่อ",
-        message: "ไม่สามารถเชื่อมต่อฐานข้อมูลได้ในขณะนี้ โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตของท่านแล้วลองใหม่อีกครั้งครับ",
-        color: "red"
-      });
-      setShowPopup(true);
+      if (!silent) {
+        setPopupContent({
+          title: "🚫 พบปัญหาการเชื่อมต่อ",
+          message:
+            "ไม่สามารถเชื่อมต่อฐานข้อมูลได้ในขณะนี้ โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ตของท่านแล้วลองใหม่อีกครั้งครับ",
+          color: "red",
+        });
+        setShowPopup(true);
+      }
+    } finally {
       setIsDbReady(true);
     }
   }, []);
 
-  const putData = useCallback(async (table, data) => {
-    try {
-      const { error } = await supabase
-        .from(table)
-        .upsert(data);
+  const putData = useCallback(
+    async (table, data) => {
+      try {
+        const { error } = await supabase.from(table).upsert(data);
+        if (error) throw error;
+        await loadData();
+      } catch (e) {
+        console.error("Supabase update failed:", e);
+        throw e;
+      }
+    },
+    [loadData]
+  );
 
-      if (error) throw error;
-
-      // อัปเดตข้อมูลใหม่หลังจากแก้ไขสำเร็จ
-      await loadData();
-    } catch (e) {
-      console.error("Supabase update failed:", e);
-      throw e; // โยน error กลับไปให้ EditBillView จัดการต่อใน catch block
-    }
-  }, [loadData]);
-
+  // โหลดข้อมูลครั้งแรกหลังล็อกอิน
   useEffect(() => {
-    if (session) loadData();
-  }, [loadData, session]);
+    if (userId) loadData();
+  }, [loadData, userId]);
 
-  // 🔎 รวมเหลือ channel เดียว (เดิมมี bills-realtime ซ้ำกับ db-realtime ทำให้ loadData()
-  // ถูกเรียกซ้ำ 2 รอบทุกครั้งที่บิลเปลี่ยน) + ใส่ console.log ไว้ช่วย debug ปัญหา
-  // สต็อกไม่ sync ข้ามเครื่อง: เปิด DevTools > Console ที่เครื่อง B ไว้ แล้วให้เครื่อง A
-  // แก้สต็อก ถ้าไม่เห็น "[realtime] products changed" ขึ้นมาเลย แปลว่า event ไม่ถึง
-  // เครื่อง B จริงๆ (ปัญหาอยู่ที่การเชื่อมต่อ/Supabase ไม่ใช่โค้ดหน้าตา), แต่ถ้าเห็น log
-  // ขึ้นมาแล้วตัวเลขบนหน้าจอยังไม่เปลี่ยน แปลว่าปัญหาอยู่ที่ re-render แทน
+  // Realtime + ระบบสำรองกันข้อมูลไม่ตรงกัน
   useEffect(() => {
-    if (!session) return;
+    if (!userId) return;
+
+    // รวม event ที่เข้ามาติด ๆ กัน (เช่นตอน import CSV) ให้เหลือการโหลดครั้งเดียว
+    let debounceTimer;
+    const reload = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => loadData({ silent: true }), 300);
+    };
+
     const channel = supabase
-      .channel('db-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bills' },
-        (payload) => {
-          console.log('[realtime] bills changed:', payload.eventType, payload);
-          loadData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'products' },
-        (payload) => {
-          console.log('[realtime] products changed:', payload.eventType, payload);
-          loadData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'promotions' },
-        (payload) => {
-          console.log('[realtime] promotions changed:', payload.eventType, payload);
-          loadData();
-        }
-      )
+      .channel(`db-realtime-${Date.now()}`) // ชื่อไม่ซ้ำ จะได้ไม่ชนกับช่องเก่าที่ยังปิดไม่เสร็จ
+      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, (p) => {
+        console.log("[RT] products", p.eventType);
+        reload();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "bills" }, (p) => {
+        console.log("[RT] bills", p.eventType);
+        reload();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "promotions" }, (p) => {
+        console.log("[RT] promotions", p.eventType);
+        reload();
+      })
       .subscribe((status, err) => {
-        // ควรเห็น status เป็น "SUBSCRIBED" ถ้าเชื่อมต่อสำเร็จ
-        console.log('[realtime] subscription status:', status, err || '');
+        console.log("[RT] status:", status, err || "");
+        // ต่อติด/ต่อกลับมาได้แล้วให้โหลดใหม่ เผื่อพลาด event ช่วงที่หลุด
+        if (status === "SUBSCRIBED") reload();
       });
 
+    // กลับมาที่แท็บหรือเปิดจอ ให้โหลดใหม่ทันที
+    const onVisible = () => {
+      if (document.visibilityState === "visible") reload();
+    };
+    const onOnline = () => reload();
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+
+    // ระบบสำรองชั้นสุดท้าย: โหลดใหม่ทุก 20 วินาทีระหว่างที่เปิดหน้าจออยู่
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") loadData({ silent: true });
+    }, 20000);
+
     return () => {
+      clearTimeout(debounceTimer);
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
       supabase.removeChannel(channel);
     };
-  }, [loadData, session]);
+  }, [loadData, userId]);
 
   const openPasswordModal = (onSuccess) => {
     setPasswordOnSuccess(() => onSuccess);
@@ -153,7 +170,6 @@ const App = () => {
     setShowPasswordModal(true);
   };
 
-  // ฟังก์ชันนี้จะจัดการสลับค่า พร้อมถามรหัสผ่าน
   const requestPasswordAndToggle = () => {
     if (!sensitiveVisible) {
       openPasswordModal(() => setSensitiveVisible(true));
@@ -162,7 +178,7 @@ const App = () => {
     }
   };
 
-  // ---- Auth gate: เช็คก่อนทุกอย่าง ----
+  // ---- Auth gate ----
   if (authLoading) return <LoadingSpinner />;
   if (!session) return <Login />;
   if (!isDbReady) return <LoadingSpinner />;
@@ -234,16 +250,16 @@ const App = () => {
               }
             />
             <Route
-                path="/dashboard"
-                element={
-                  <OverviewDashboard
-                    bills={bills}
-                    formatCurrency={formatCurrency}
-                    openPasswordModal={openPasswordModal}
-                    setSidebarOpen={setIsSidebarOpen}
-                  />
-                }
-              />
+              path="/dashboard"
+              element={
+                <OverviewDashboard
+                  bills={bills}
+                  formatCurrency={formatCurrency}
+                  openPasswordModal={openPasswordModal}
+                  setSidebarOpen={setIsSidebarOpen}
+                />
+              }
+            />
             <Route
               path="/inventory"
               element={
@@ -270,7 +286,7 @@ const App = () => {
                   setShowPopup={setShowPopup}
                   sensitiveVisible={sensitiveVisible}
                   onToggleSensitive={() => setSensitiveVisible(!sensitiveVisible)}
-                  setSidebarOpen={setIsSidebarOpen}  
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -282,7 +298,7 @@ const App = () => {
                   bills={bills}
                   products={products}
                   loadData={loadData}
-                  putData={putData} // ตรวจสอบว่าคุณมีฟังก์ชันนี้ส่งเข้ามา
+                  putData={putData}
                   navigateTo={handleNavigate}
                   setShowPopup={setShowPopup}
                   setPopupContent={setPopupContent}
@@ -308,9 +324,7 @@ const App = () => {
           SENSITIVE_PASSWORD={SENSITIVE_PASSWORD}
         />
       )}
-      {showPopup && (
-        <Popup content={popupContent} setShowPopup={setShowPopup} />
-      )}
+      {showPopup && <Popup content={popupContent} setShowPopup={setShowPopup} />}
     </div>
   );
 };
