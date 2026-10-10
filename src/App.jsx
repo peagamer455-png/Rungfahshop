@@ -19,6 +19,8 @@ import Login from "./components/Login";
 
 const App = () => {
   const { session, loading: authLoading } = useAuth();
+  const accessToken = session?.access_token;
+  const hasSession = !!session;
 
   const [products, setProducts] = useState([]);
   const [bills, setBills] = useState([]);
@@ -28,7 +30,7 @@ const App = () => {
   const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const handleNavigate = (path) => {
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
     navigate(cleanPath);
   };
 
@@ -42,6 +44,10 @@ const App = () => {
   const [passwordOnSuccess, setPasswordOnSuccess] = useState(null);
   const [currentBillId, setCurrentBillId] = useState(null);
   const SENSITIVE_PASSWORD = "241114";
+
+  // true เมื่อ realtime channel อยู่ในสถานะ SUBSCRIBED (ใช้ตัดสินใจเรื่อง polling สำรอง)
+  const realtimeOkRef = useRef(false);
+  const reloadTimerRef = useRef(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -82,6 +88,15 @@ const App = () => {
     }
   }, []);
 
+  // รวม event ที่มาถี่ๆ ให้เหลือ loadData() ครั้งเดียว (debounce 300ms)
+  const scheduleReload = useCallback(() => {
+    if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+    reloadTimerRef.current = setTimeout(() => {
+      reloadTimerRef.current = null;
+      loadData();
+    }, 300);
+  }, [loadData]);
+
   const putData = useCallback(async (table, data) => {
     try {
       const { error } = await supabase
@@ -99,52 +114,135 @@ const App = () => {
   }, [loadData]);
 
   useEffect(() => {
-    if (session) loadData();
-  }, [loadData, session]);
+    if (hasSession) loadData();
+  }, [loadData, hasSession]);
 
-  // 🔎 รวมเหลือ channel เดียว (เดิมมี bills-realtime ซ้ำกับ db-realtime ทำให้ loadData()
-  // ถูกเรียกซ้ำ 2 รอบทุกครั้งที่บิลเปลี่ยน) + ใส่ console.log ไว้ช่วย debug ปัญหา
-  // สต็อกไม่ sync ข้ามเครื่อง: เปิด DevTools > Console ที่เครื่อง B ไว้ แล้วให้เครื่อง A
-  // แก้สต็อก ถ้าไม่เห็น "[realtime] products changed" ขึ้นมาเลย แปลว่า event ไม่ถึง
-  // เครื่อง B จริงๆ (ปัญหาอยู่ที่การเชื่อมต่อ/Supabase ไม่ใช่โค้ดหน้าตา), แต่ถ้าเห็น log
-  // ขึ้นมาแล้วตัวเลขบนหน้าจอยังไม่เปลี่ยน แปลว่าปัญหาอยู่ที่ re-render แทน
+  // ---------------------------------------------------------------
+  // Realtime: channel เดียว + กันหลุดเงียบ
+  //  1) setAuth ด้วย access token ล่าสุดก่อน subscribe (และ re-subscribe เมื่อ token เปลี่ยน)
+  //  2) ถ้า channel ขึ้น CHANNEL_ERROR / TIMED_OUT / CLOSED -> สร้างใหม่อัตโนมัติ (backoff)
+  //  3) ทุกครั้งที่ SUBSCRIBED (รวมตอนต่อใหม่) -> ดึงข้อมูลล่าสุดกัน event ที่พลาดไประหว่างหลุด
+  // ---------------------------------------------------------------
   useEffect(() => {
-    if (!session) return;
-    const channel = supabase
-      .channel('db-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'bills' },
-        (payload) => {
-          console.log('[realtime] bills changed:', payload.eventType, payload);
-          loadData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'products' },
-        (payload) => {
-          console.log('[realtime] products changed:', payload.eventType, payload);
-          loadData();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'promotions' },
-        (payload) => {
-          console.log('[realtime] promotions changed:', payload.eventType, payload);
-          loadData();
-        }
-      )
-      .subscribe((status, err) => {
-        // ควรเห็น status เป็น "SUBSCRIBED" ถ้าเชื่อมต่อสำเร็จ
-        console.log('[realtime] subscription status:', status, err || '');
-      });
+    if (!hasSession) return;
+
+    let cancelled = false;
+    let channel = null;
+    let retryTimer = null;
+    let retryCount = 0;
+    let connectionId = 0;
+
+    const connect = () => {
+      if (cancelled) return;
+
+      if (channel) {
+        supabase.removeChannel(channel);
+        channel = null;
+      }
+
+      const myId = ++connectionId;
+
+      channel = supabase
+        .channel(`db-realtime-${myId}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "bills" },
+          (payload) => {
+            console.log("[realtime] bills changed:", payload.eventType);
+            scheduleReload();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "products" },
+          (payload) => {
+            console.log("[realtime] products changed:", payload.eventType);
+            scheduleReload();
+          }
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "promotions" },
+          (payload) => {
+            console.log("[realtime] promotions changed:", payload.eventType);
+            scheduleReload();
+          }
+        )
+        .subscribe((status, err) => {
+          // ข้าม callback ของ channel เก่าที่ถูกแทนที่ไปแล้ว
+          if (cancelled || myId !== connectionId) return;
+
+          console.log("[realtime] status:", status, err || "");
+
+          if (status === "SUBSCRIBED") {
+            realtimeOkRef.current = true;
+            retryCount = 0;
+            scheduleReload(); // sync ข้อมูลล่าสุดทุกครั้งที่ต่อติด
+            return;
+          }
+
+          if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            realtimeOkRef.current = false;
+            if (retryTimer) clearTimeout(retryTimer);
+            const delay = Math.min(30000, 1000 * 2 ** retryCount);
+            retryCount += 1;
+            console.warn(`[realtime] reconnecting in ${delay}ms`);
+            retryTimer = setTimeout(connect, delay);
+          }
+        });
+    };
+
+    // ให้ Realtime ใช้ token ล่าสุดของผู้ใช้
+    if (accessToken) supabase.realtime.setAuth(accessToken);
+    connect();
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
+      realtimeOkRef.current = false;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (channel) supabase.removeChannel(channel);
     };
-  }, [loadData, session]);
+  }, [hasSession, accessToken, scheduleReload]);
+
+  // กันพลาด: กลับมาที่ tab / เน็ตกลับมา -> ดึงข้อมูลใหม่
+  useEffect(() => {
+    if (!hasSession) return;
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") scheduleReload();
+    };
+    const onOnline = () => scheduleReload();
+
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+    };
+  }, [hasSession, scheduleReload]);
+
+  // Polling สำรอง: ทำงานเฉพาะตอนที่ realtime ไม่ SUBSCRIBED (ทุก 20 วินาที)
+  useEffect(() => {
+    if (!hasSession) return;
+    const timer = setInterval(() => {
+      if (!realtimeOkRef.current && document.visibilityState === "visible") {
+        console.log("[realtime] not subscribed, polling fallback");
+        loadData();
+      }
+    }, 20000);
+    return () => clearInterval(timer);
+  }, [hasSession, loadData]);
+
+  // เคลียร์ debounce timer ตอน unmount
+  useEffect(() => {
+    return () => {
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+    };
+  }, []);
 
   const openPasswordModal = (onSuccess) => {
     setPasswordOnSuccess(() => onSuccess);
@@ -234,16 +332,16 @@ const App = () => {
               }
             />
             <Route
-                path="/dashboard"
-                element={
-                  <OverviewDashboard
-                    bills={bills}
-                    formatCurrency={formatCurrency}
-                    openPasswordModal={openPasswordModal}
-                    setSidebarOpen={setIsSidebarOpen}
-                  />
-                }
-              />
+              path="/dashboard"
+              element={
+                <OverviewDashboard
+                  bills={bills}
+                  formatCurrency={formatCurrency}
+                  openPasswordModal={openPasswordModal}
+                  setSidebarOpen={setIsSidebarOpen}
+                />
+              }
+            />
             <Route
               path="/inventory"
               element={
@@ -270,7 +368,7 @@ const App = () => {
                   setShowPopup={setShowPopup}
                   sensitiveVisible={sensitiveVisible}
                   onToggleSensitive={() => setSensitiveVisible(!sensitiveVisible)}
-                  setSidebarOpen={setIsSidebarOpen}  
+                  setSidebarOpen={setIsSidebarOpen}
                 />
               }
             />
@@ -282,7 +380,7 @@ const App = () => {
                   bills={bills}
                   products={products}
                   loadData={loadData}
-                  putData={putData} // ตรวจสอบว่าคุณมีฟังก์ชันนี้ส่งเข้ามา
+                  putData={putData}
                   navigateTo={handleNavigate}
                   setShowPopup={setShowPopup}
                   setPopupContent={setPopupContent}
