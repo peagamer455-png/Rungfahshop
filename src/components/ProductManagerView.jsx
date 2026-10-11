@@ -220,6 +220,11 @@ const ProductManagerView = ({
     let importedCount = 0;
     const totalRows = rows.length - 1;
 
+    // 🔽 รวมเป็นชุด (batch) แทนการ upsert ทีละแถว + .select() + หน่วง 50ms
+    // เดิม 1 แถว = 1 request + 1 realtime event ไปยังทุกเครื่อง
+    const withId = new Map(); // id → payload (ตัดแถว id ซ้ำ ไม่งั้น upsert ชุดเดียวกันจะ error)
+    const withoutId = [];
+
     for (let i = 1; i < rows.length; i++) {
       const cols = rows[i];
       if (cols.length < 2) continue;
@@ -239,22 +244,51 @@ const ProductManagerView = ({
         location: idx.location >= 0 ? cols[idx.location]?.trim() : null,
       };
 
-      if (rawId) payload.id = parseInt(rawId);
-
-      // ทำการ Upsert ครั้งเดียวและเช็ค error ครั้งเดียว
-      const { data, error } = await supabase
-        .from("products")
-        .upsert(payload, { onConflict: "id" })
-        .select();
-
-      if (!error) {
-        importedCount++;
+      if (rawId) {
+        payload.id = parseInt(rawId);
+        withId.set(payload.id, payload);
       } else {
-        console.error("Import error at row", i, error);
+        withoutId.push(payload);
       }
+    }
 
-      setImportProgress(Math.round((i / totalRows) * 100));
-      await new Promise((resolve) => setTimeout(resolve, 50));
+    const CHUNK = 200;
+    const writeChunk = async (chunk, isUpsert) => {
+      const q = isUpsert
+        ? supabase.from("products").upsert(chunk, { onConflict: "id" })
+        : supabase.from("products").insert(chunk);
+      const { error } = await q;
+      if (!error) return chunk.length;
+
+      // ถ้าชุดนี้พัง ลองทีละแถวเฉพาะชุดนั้น เพื่อให้ได้ผลลัพธ์เหมือนเดิม (ข้ามแถวที่เสีย)
+      console.error("Import chunk error:", error);
+      let ok = 0;
+      for (const row of chunk) {
+        const { error: rowErr } = isUpsert
+          ? await supabase.from("products").upsert(row, { onConflict: "id" })
+          : await supabase.from("products").insert(row);
+        if (!rowErr) ok++;
+        else console.error("Import row error:", row, rowErr);
+      }
+      return ok;
+    };
+
+    const batches = [
+      ...Array.from({ length: Math.ceil(withId.size / CHUNK) }, (_, k) => ({
+        chunk: [...withId.values()].slice(k * CHUNK, (k + 1) * CHUNK),
+        isUpsert: true,
+      })),
+      ...Array.from({ length: Math.ceil(withoutId.length / CHUNK) }, (_, k) => ({
+        chunk: withoutId.slice(k * CHUNK, (k + 1) * CHUNK),
+        isUpsert: false,
+      })),
+    ];
+
+    let processed = 0;
+    for (const { chunk, isUpsert } of batches) {
+      importedCount += await writeChunk(chunk, isUpsert);
+      processed += chunk.length;
+      setImportProgress(Math.round((processed / Math.max(totalRows, 1)) * 100));
     }
 
     // โหลดข้อมูลใหม่ทั้งหมดหลังจากจบ Loop
