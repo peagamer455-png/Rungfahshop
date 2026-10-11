@@ -14,6 +14,7 @@ const EditBillView = ({
   bills = [],
   products = [],
   loadData,
+  promotions = [],
   navigateTo,
   setShowPopup,
   setPopupContent,
@@ -30,16 +31,10 @@ const EditBillView = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [printSize, setPrintSize] = useState("receipt");
-  const [promotions, setPromotions] = useState([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
   const barcodeBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
-
-  useEffect(() => {
-    loadData?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (!billToEdit || isHydrated) return;
@@ -68,15 +63,6 @@ const EditBillView = ({
   }, [billItems, draftKey, isHydrated]);
 
   const clearDraft = useCallback(() => localStorage.removeItem(draftKey), [draftKey]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase.from("promotions").select("*");
-      if (!cancelled && !error) setPromotions(data || []);
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
   const { subTotal, totalsale, discount, activePromos } = useMemo(
     () => calcBillTotals(billItems, promotions),
