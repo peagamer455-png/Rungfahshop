@@ -157,7 +157,7 @@ const computeProductSalesSummary = (billsForDate, promoDefs) => {
     };
 };
 
-const POSView = ({ products, bills, promotions, loadData, setPopupContent, setShowPopup, navigateTo, sensitiveVisible, openPasswordModal, onToggleSensitive, setSidebarOpen }) => {
+const POSView = ({ products, bills, promotions, loadData, ensureBillsFrom, setPopupContent, setShowPopup, navigateTo, sensitiveVisible, openPasswordModal, onToggleSensitive, setSidebarOpen }) => {
     // ✅ วันที่ที่กำลังดูสรุปอยู่ (default = วันนี้)
     const [selectedDate, setSelectedDate] = useState(() => toLocalDateKey(new Date()));
 
@@ -168,8 +168,9 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
 
     const selectedDateLabel = useMemo(() => formatDateLabel(selectedDate), [selectedDate]);
 
-    const getBillsForDate = (dateKey) => {
-        return (bills || []).filter(b => {
+    // extra = บิลเก่าที่เพิ่งโหลดเพิ่มระหว่างเปิด popup (closure ของ popup ยังถือ bills ชุดเดิมอยู่)
+    const getBillsForDate = (dateKey, extra = []) => {
+        return [...(bills || []), ...extra].filter(b => {
             if (!b.date) return false;
             return toLocalDateKey(new Date(b.date)) === dateKey;
         });
@@ -226,17 +227,19 @@ const POSView = ({ products, bills, promotions, loadData, setPopupContent, setSh
 
     // ✅ dateKey เป็น optional — ไม่ใส่ = ใช้ selectedDate ปัจจุบันของหน้า
     // popup มี navigator ของตัวเอง เปลี่ยนวันในนี้ได้เลยโดยไม่ต้องปิด popup
-    const openProductSummary = (dateKey = selectedDate) => {
-        const billsForDate = getBillsForDate(dateKey);
+    const openProductSummary = (dateKey = selectedDate, extraBills = []) => {
+        const billsForDate = getBillsForDate(dateKey, extraBills);
         const summary = computeProductSalesSummary(billsForDate, promotions);
         const { normalList, promoList, grandTotal, grandQty, normalTotal, promoTotal } = summary;
         const dateLabel = formatDateLabel(dateKey);
         const isDateToday = dateKey === todayKey;
 
-        const changeDate = (newKey) => {
+        const changeDate = async (newKey) => {
             if (newKey > todayKey) return;
+            // บิลเก่ากว่าช่วงที่โหลดไว้ → โหลดเพิ่มเฉพาะตอนที่ดูย้อนหลังไกลจริงๆ
+            const more = (await ensureBillsFrom?.(newKey)) || [];
             setSelectedDate(newKey);
-            openProductSummary(newKey);
+            openProductSummary(newKey, [...extraBills, ...more]);
         };
 
         const handlePrev = () => {
