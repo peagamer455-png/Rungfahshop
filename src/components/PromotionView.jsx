@@ -1,29 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Header } from "./SharedUI";
 
-const PromotionView = ({ products, setPopupContent, setShowPopup, setSidebarOpen}) => {
-  const [promotions, setPromotions] = useState([]);
+const PromotionView = ({ products, promotions = [], reloadPromotions, setPopupContent, setShowPopup, setSidebarOpen}) => {
   const [formData, setFormData] = useState({
     name: '', type: 'qty', items: [], minQty: 1, discountPrice: ''
   });
   const [searchTerm, setSearchTerm] = useState('');
 
-  const fetchPromotions = async () => {
-    const { data, error } = await supabase
-      .from('promotions')
-      .select('*')
-      .order('name', { ascending: true });
-
-    if (error) {
-      console.error("Error fetching from Supabase:", error);
-      setPromotions([]);
-    } else {
-      setPromotions(data || []);
-    }
-  };
-
-  useEffect(() => { fetchPromotions(); }, []);
+  // ใช้ promotions จาก App (realtime อัปเดตให้อยู่แล้ว) ไม่ดึงซ้ำตอนเปิดหน้า
+  const fetchPromotions = () => reloadPromotions?.();
 
   const showAppPopup = (title, message) => {
     setPopupContent({ title, message });
@@ -99,14 +85,16 @@ const PromotionView = ({ products, setPopupContent, setShowPopup, setSidebarOpen
     setShowPopup(true);
   };
 
+  const sortedPromos = [...promotions].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase())).slice(0, 5);
 
   const renderList = () => (
     <div className="space-y-4">
-      {promotions.length === 0 ? (
+      {sortedPromos.length === 0 ? (
         <div className="text-center py-10 text-gray-400 bg-white rounded-2xl border border-dashed">ไม่มีโปรโมชั่น</div>
       ) : (
-        promotions.map(promo => (
+        sortedPromos.map(promo => (
           <div key={promo.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between hover:border-green-200 transition-all">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-green-50 text-green-600 rounded-xl">
