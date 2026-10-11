@@ -4,7 +4,7 @@ import { Header } from "./SharedUI";
 import Pagination from './Pagination';
 import HistoryBillCard from './HistoryBillCard';
 
-const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPopup, showBillDetails, setSidebarOpen}) => {
+const BillHistoryView = ({ bills, products, loadData, ensureBillsFrom, setPopupContent, setShowPopup, showBillDetails, setSidebarOpen}) => {
   const [filterTerm, setFilterTerm] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -14,6 +14,11 @@ const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPo
   const [clearError, setClearError] = useState('');
   const [clearPasswordVisible, setClearPasswordVisible] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+
+  // เลือกวันที่เริ่มต้นที่เก่ากว่าบิลที่โหลดไว้ (ค่าเริ่มต้น 30 วัน) → โหลดเพิ่มเฉพาะช่วงนั้น
+  useEffect(() => {
+    if (dateFrom) ensureBillsFrom?.(dateFrom);
+  }, [dateFrom, ensureBillsFrom]);
 
   const itemsPerPage = 15;
   const SENSITIVE_PASSWORD = '261250'; // รหัสผ่านสำหรับลบประวัติ
@@ -136,6 +141,9 @@ const BillHistoryView = ({ bills, products, loadData, setPopupContent, setShowPo
           <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }} className="w-full p-2 border rounded-lg" />
           <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }} className="w-full p-2 border rounded-lg" />
         </div>
+        <p className="md:col-span-3 text-xs text-gray-400">
+          แสดงบิลย้อนหลัง 30 วันล่าสุด — ต้องการดูบิลที่เก่ากว่านั้น ให้เลือก "วันที่เริ่มต้น" ระบบจะโหลดเพิ่มให้
+        </p>
       </div>
 
       <div className="flex justify-end mb-4">
