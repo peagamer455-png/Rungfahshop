@@ -15,6 +15,7 @@ const AddBillView = ({
   setPopupContent,
   setShowPopup,
   loadData,
+  promotions = [],
   setSidebarOpen,
 }) => {
   const [billItems, setBillItems] = useState(() => {
@@ -34,15 +35,9 @@ const AddBillView = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [printSize, setPrintSize] = useState("receipt");
-  const [promotions, setPromotions] = useState([]);
 
   const barcodeBufferRef = useRef("");
   const lastKeyTimeRef = useRef(0);
-
-  useEffect(() => {
-    loadData?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     localStorage.setItem("draft_add_items", JSON.stringify(billItems));
@@ -58,15 +53,6 @@ const AddBillView = ({
     localStorage.removeItem("draft_add_items");
     localStorage.removeItem("draft_add_customer");
     localStorage.removeItem("draft_add_customerDetail");
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data, error } = await supabase.from("promotions").select("*");
-      if (!cancelled && !error) setPromotions(data || []);
-    })();
-    return () => { cancelled = true; };
   }, []);
 
   const { subTotal, totalsale, discount, activePromos } = useMemo(
